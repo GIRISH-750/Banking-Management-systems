@@ -4,7 +4,7 @@
 #include "../include/entities.h"
 
 int main() {
-    struct Counter c = {1, 1, 1, 1};
+    struct Counter c = {1, 1, 1, 1, 1, 1, 1};
 
     int fd = open("data/counter.dat", O_RDWR | O_CREAT, 0644);
     if (fd == -1) {
@@ -18,8 +18,9 @@ int main() {
         close(fd);
         return 1;
     }
-    printf("Wrote counter: %d %d %d %d\n",
-           c.next_acc_no, c.next_loan_id, c.next_txn_id, c.next_feedback_id);
+    printf("Wrote counter: %d %d %d %d %d %d %d\n",
+           c.next_customer_id, c.next_employee_id, c.next_manager_id,
+           c.next_admin_id, c.next_loan_id, c.next_feedback_id, c.next_transaction_id);
 
     lseek(fd, 0, SEEK_SET);
     struct Counter c2;
@@ -29,8 +30,9 @@ int main() {
         close(fd);
         return 1;
     }
-    printf("Read back:   %d %d %d %d\n",
-           c2.next_acc_no, c2.next_loan_id, c2.next_txn_id, c2.next_feedback_id);
+    printf("Read back:   %d %d %d %d %d %d %d\n",
+           c2.next_customer_id, c2.next_employee_id, c2.next_manager_id,
+           c2.next_admin_id, c2.next_loan_id, c2.next_feedback_id, c2.next_transaction_id);
 
     close(fd);
     return 0;

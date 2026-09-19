@@ -4,63 +4,75 @@
 #define NAME_LEN 50
 #define PASS_LEN 20
 #define MSG_LEN 200
+#define STATUS_LEN 15
+#define TYPE_LEN 15
+#define TIMESTAMP_LEN 20
+#define MAX_ASSIGNED_LOANS 50   // TODO: confirm this cap with TA
 
-struct Account {
-    int acc_no;
-    char name[NAME_LEN];
-    char password[PASS_LEN];
-    float balance;
-    int is_joint;
-    int joint_holder_id;
-    int is_active;
-};
-
-struct Employee {
-    int emp_id;
-    char name[NAME_LEN];
+struct Admin {
+    int adminID;
+    char first_name[NAME_LEN];
+    char last_name[NAME_LEN];
     char password[PASS_LEN];
 };
 
 struct Manager {
-    int mgr_id;
-    char name[NAME_LEN];
+    int managerID;
+    char first_name[NAME_LEN];
+    char last_name[NAME_LEN];
     char password[PASS_LEN];
 };
 
-struct Admin {
-    int admin_id;
-    char name[NAME_LEN];
+struct Employee {
+    int employeeID;
+    char first_name[NAME_LEN];
+    char last_name[NAME_LEN];
     char password[PASS_LEN];
+    char status[STATUS_LEN];
+    int assigned_loans[MAX_ASSIGNED_LOANS];
+    int loan_count;
+};
+
+struct Customer {
+    int userID;
+    char firstName[NAME_LEN];
+    char lastName[NAME_LEN];
+    char password[PASS_LEN];
+    float balance;
+    float loan;
+    char status[STATUS_LEN];
 };
 
 struct Loan {
-    int loan_id;
-    int acc_no;
+    int loanID;
+    int userID;
     float amount;
-    int status;            // 0=pending, 1=approved, 2=rejected
-    int assigned_emp_id;   // -1 = unassigned
-};
-
-struct Transaction {
-    int txn_id;
-    int acc_no;
-    char type[15];
-    float amount;
-    long timestamp;
+    char status[STATUS_LEN];
 };
 
 struct Feedback {
-    int feedback_id;
-    int acc_no;
+    int feedbackID;
+    int customerID;
     char message[MSG_LEN];
-    int reviewed;
+    char status[STATUS_LEN];
+};
+
+struct Transaction {
+    int transactionID;
+    int customerID;
+    char type[TYPE_LEN];
+    float amount;
+    char timestamp[TIMESTAMP_LEN];
 };
 
 struct Counter {
-    int next_acc_no;
+    int next_customer_id;
+    int next_employee_id;
+    int next_manager_id;
+    int next_admin_id;
     int next_loan_id;
-    int next_txn_id;
     int next_feedback_id;
+    int next_transaction_id;
 };
 
 #endif
