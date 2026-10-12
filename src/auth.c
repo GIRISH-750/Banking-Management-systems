@@ -41,7 +41,7 @@ int authenticate(int role, int id, const char* password) {
 
     if (role == ROLE_ADMIN) {
         struct Admin a;
-        rc = load_record("data/admins.dat", id, &a, sizeof(a));
+        rc = load_record("data/admins.bin", id, &a, sizeof(a));
         if (rc == LOAD_ERROR) {
             return AUTH_ERROR;
         }
@@ -56,7 +56,7 @@ int authenticate(int role, int id, const char* password) {
 
     if (role == ROLE_MANAGER) {
         struct Manager m;
-        rc = load_record("data/managers.dat", id, &m, sizeof(m));
+        rc = load_record("data/managers.bin", id, &m, sizeof(m));
         if (rc == LOAD_ERROR) {
             return AUTH_ERROR;
         }
@@ -71,7 +71,7 @@ int authenticate(int role, int id, const char* password) {
 
     if (role == ROLE_EMPLOYEE) {
         struct Employee e;
-        rc = load_record("data/employees.dat", id, &e, sizeof(e));
+        rc = load_record("data/employees.bin", id, &e, sizeof(e));
         if (rc == LOAD_ERROR) {
             return AUTH_ERROR;
         }
@@ -89,7 +89,7 @@ int authenticate(int role, int id, const char* password) {
 
     if (role == ROLE_CUSTOMER) {
         struct Customer c;
-        rc = load_record("data/customers.dat", id, &c, sizeof(c));
+        rc = load_record("data/customers.bin", id, &c, sizeof(c));
         if (rc == LOAD_ERROR) {
             return AUTH_ERROR;
         }

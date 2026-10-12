@@ -82,19 +82,19 @@ int main(void) {
     counter.next_feedback_id = 1;
     counter.next_transaction_id = 1;
 
-    if (write_records("data/admins.dat", admins, sizeof(struct Admin), 1) < 0) {
+    if (write_records("data/admins.bin", admins, sizeof(struct Admin), 1) < 0) {
         return 1;
     }
-    if (write_records("data/managers.dat", managers, sizeof(struct Manager), 1) < 0) {
+    if (write_records("data/managers.bin", managers, sizeof(struct Manager), 1) < 0) {
         return 1;
     }
-    if (write_records("data/employees.dat", employees, sizeof(struct Employee), 1) < 0) {
+    if (write_records("data/employees.bin", employees, sizeof(struct Employee), 1) < 0) {
         return 1;
     }
-    if (write_records("data/customers.dat", customers, sizeof(struct Customer), 2) < 0) {
+    if (write_records("data/customers.bin", customers, sizeof(struct Customer), 2) < 0) {
         return 1;
     }
-    if (write_records("data/counter.dat", &counter, sizeof(struct Counter), 1) < 0) {
+    if (write_records("data/counter.bin", &counter, sizeof(struct Counter), 1) < 0) {
         return 1;
     }
 

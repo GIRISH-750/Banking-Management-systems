@@ -6,7 +6,7 @@
 int main() {
     struct Counter c = {1, 1, 1, 1, 1, 1, 1};
 
-    int fd = open("data/counter.dat", O_RDWR | O_CREAT, 0644);
+    int fd = open("data/counter.bin", O_RDWR | O_CREAT, 0644);
     if (fd == -1) {
         perror("open failed");
         return 1;
