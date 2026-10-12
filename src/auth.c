@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "auth.h"
+#include "hash.h"
 #include "entities.h"
 
 #define LOAD_OK        0
@@ -29,7 +30,9 @@ static int load_record(const char* path, int id, void* buf, size_t size) {
 }
 
 static int password_matches(const char* stored, const char* given) {
-    return strncmp(stored, given, PASS_LEN) == 0;
+    char hashed[HASH_HEX_LEN];
+    hash_password(given, hashed);
+    return strncmp(stored, hashed, PASS_LEN) == 0;
 }
 
 int authenticate(int role, int id, const char* password) {

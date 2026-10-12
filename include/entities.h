@@ -2,7 +2,7 @@
 #define ENTITIES_H
 
 #define NAME_LEN 50
-#define PASS_LEN 20
+#define PASS_LEN 65
 #define MSG_LEN 200
 #define STATUS_LEN 15
 #define TYPE_LEN 15

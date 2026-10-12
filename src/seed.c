@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "entities.h"
+#include "hash.h"
 
 /* Writes `count` records of `size` bytes each into a fresh file. */
 static int write_records(const char* path, const void* buf, size_t size, int count) {
@@ -40,19 +41,19 @@ int main(void) {
     admins[0].adminID = 1;
     strncpy(admins[0].first_name, "Admin", NAME_LEN - 1);
     strncpy(admins[0].last_name, "One", NAME_LEN - 1);
-    strncpy(admins[0].password, "admin123", PASS_LEN - 1);
+    hash_password("admin123", admins[0].password);
 
     /* Manager: ID 1 */
     managers[0].managerID = 1;
     strncpy(managers[0].first_name, "Manager", NAME_LEN - 1);
     strncpy(managers[0].last_name, "One", NAME_LEN - 1);
-    strncpy(managers[0].password, "manager123", PASS_LEN - 1);
+    hash_password("manager123", managers[0].password);
 
     /* Employee: ID 1 */
     employees[0].employeeID = 1;
     strncpy(employees[0].first_name, "Employee", NAME_LEN - 1);
     strncpy(employees[0].last_name, "One", NAME_LEN - 1);
-    strncpy(employees[0].password, "emp123", PASS_LEN - 1);
+    hash_password("emp123", employees[0].password);
     strncpy(employees[0].status, "ACTIVE", STATUS_LEN - 1);
     employees[0].loan_count = 0;
 
@@ -60,7 +61,7 @@ int main(void) {
     customers[0].userID = 1;
     strncpy(customers[0].firstName, "Alice", NAME_LEN - 1);
     strncpy(customers[0].lastName, "Sharma", NAME_LEN - 1);
-    strncpy(customers[0].password, "alice123", PASS_LEN - 1);
+    hash_password("alice123", customers[0].password);
     customers[0].balance = 5000.0f;
     customers[0].loan = 0.0f;
     strncpy(customers[0].status, "ACTIVE", STATUS_LEN - 1);
@@ -68,7 +69,7 @@ int main(void) {
     customers[1].userID = 2;
     strncpy(customers[1].firstName, "Bob", NAME_LEN - 1);
     strncpy(customers[1].lastName, "Verma", NAME_LEN - 1);
-    strncpy(customers[1].password, "bob123", PASS_LEN - 1);
+    hash_password("bob123", customers[1].password);
     customers[1].balance = 10000.0f;
     customers[1].loan = 0.0f;
     strncpy(customers[1].status, "ACTIVE", STATUS_LEN - 1);
