@@ -1,2 +1,4 @@
 test_counter
 *.o
+test_hash
+seed
