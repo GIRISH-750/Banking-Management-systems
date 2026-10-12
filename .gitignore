@@ -2,3 +2,4 @@ test_counter
 *.o
 test_hash
 seed
+test_auth
