@@ -10,52 +10,9 @@
 #include <arpa/inet.h>
 #include "config.h"
 #include "auth.h"
+#include "net_util.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
-
-/* Sends the whole string. MSG_NOSIGNAL: no SIGPIPE if the client has gone. */
-static int send_line(int fd, const char* msg) {
-    size_t len = strlen(msg);
-    size_t sent = 0;
-    while (sent < len) {
-        ssize_t n = send(fd, msg + sent, len - sent, MSG_NOSIGNAL);
-        if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        sent += (size_t)n;
-    }
-    return 0;
-}
-
-/* Reads one line. Returns 1 = got a line, 0 = client closed, -1 = error.
-   Extra characters beyond `size` are dropped, so a huge line cannot overflow buf. */
-static int read_line(int fd, char* buf, size_t size) {
-    size_t i = 0;
-    while (1) {
-        char c;
-        ssize_t n = read(fd, &c, 1);
-        if (n == 0) {
-            return 0;
-        }
-        if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        if (c == '\n') {
-            break;
-        }
-        if (c != '\r' && i < size - 1) {
-            buf[i++] = c;
-        }
-    }
-    buf[i] = '\0';
-    return 1;
-}
 
 static const char* auth_message(int rc) {
     switch (rc) {
@@ -85,6 +42,16 @@ static void* client_thread(void* arg) {
         if (strcmp(line, "QUIT") == 0) {
             send_line(fd, "Bye\n");
             break;
+        }
+
+        if (strcmp(line, "LOGOUT") == 0) {
+            if (!logged_in) {
+                send_line(fd, "ERR Not logged in\n");
+            } else {
+                logged_in = 0;
+                send_line(fd, "OK Logged out\n");
+            }
+            continue;
         }
 
         int role, id;
