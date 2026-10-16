@@ -11,6 +11,7 @@
 #include "config.h"
 #include "auth.h"
 #include "net_util.h"
+#include "session.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -31,6 +32,7 @@ static void* client_thread(void* arg) {
 
     char line[MAX_LINE_LEN];
     int logged_in = 0;
+    int cur_role = 0, cur_id = 0;   /* who this connection is logged in as */
 
     send_line(fd, "Welcome. Commands: LOGIN <role 1-4> <id> <password> | QUIT\n");
 
@@ -48,6 +50,7 @@ static void* client_thread(void* arg) {
             if (!logged_in) {
                 send_line(fd, "ERR Not logged in\n");
             } else {
+                session_end(cur_role, cur_id);
                 logged_in = 0;
                 send_line(fd, "OK Logged out\n");
             }
@@ -63,14 +66,29 @@ static void* client_thread(void* arg) {
             }
             int rc = authenticate(role, id, pw);
             if (rc == AUTH_OK) {
-                logged_in = 1;
+                /* password is correct, only now check for an existing session */
+                int sr = session_start(role, id);
+                if (sr == SESSION_OK) {
+                    logged_in = 1;
+                    cur_role = role;
+                    cur_id = id;
+                    send_line(fd, auth_message(rc));
+                } else if (sr == SESSION_ALREADY_ACTIVE) {
+                    send_line(fd, "ERR User already logged in\n");
+                } else {
+                    send_line(fd, "ERR Server busy\n");
+                }
+            } else {
+                send_line(fd, auth_message(rc));
             }
-            send_line(fd, auth_message(rc));
         } else {
             send_line(fd, "ERR Unknown command\n");
         }
     }
 
+    if (logged_in) {
+        session_end(cur_role, cur_id);   /* client left without LOGOUT */
+    }
     close(fd);
     sem_post(&conn_sem);   /* free the slot for the next client */
     return NULL;
