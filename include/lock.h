@@ -14,4 +14,9 @@ int lock_record(int fd, int id, size_t size, short type);
 /* Releases the lock on that record. Returns 0 on success, -1 on error. */
 int unlock_record(int fd, int id, size_t size);
 
+/* Locks the WHOLE file (offset 0, length 0 = "to end of file, including
+   records added later"). Used when scanning every record. */
+int lock_file(int fd, short type);
+int unlock_file(int fd);
+
 #endif

@@ -99,6 +99,11 @@ int main(void) {
         return 1;
     }
 
+    /* empty transaction log (0 records) */
+    if (write_records("data/transactions.bin", NULL, sizeof(struct Transaction), 0) < 0) {
+        return 1;
+    }
+
     printf("Seed done.\n");
     return 0;
 }

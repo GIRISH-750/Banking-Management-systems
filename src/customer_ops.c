@@ -4,6 +4,7 @@
 #include "customer_ops.h"
 #include "customer_store.h"
 #include "lock.h"
+#include "txn_store.h"
 
 #define MAX_AMOUNT 1000000.0f   /* refuse absurd amounts in one go */
 
@@ -62,6 +63,9 @@ static int change_balance(int id, float amount, int sign, float* balance) {
         if (customer_write(fd, id, &c) != STORE_OK) {
             result = OP_ERROR;
         } else {
+            /* logged while the record is still locked, so history order
+               matches the real order of balance changes */
+            txn_log(id, sign > 0 ? TXN_DEPOSIT : TXN_WITHDRAW, amount);
             *balance = c.balance;
             result = OP_OK;
         }
@@ -127,6 +131,8 @@ int op_transfer(int from, int to, float amount, float* balance) {
             customer_write(fd, from, &src);
             result = OP_ERROR;
         } else {
+            txn_log(from, TXN_TRANSFER_OUT, amount);
+            txn_log(to, TXN_TRANSFER_IN, amount);
             *balance = src.balance;
             result = OP_OK;
         }
