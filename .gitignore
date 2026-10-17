@@ -1,8 +1,8 @@
-# compiled programs
-server
-client
-seed
-test_*
-!tests/
+# compiled programs (top folder only, so tests/*.c are still tracked)
+/server
+/client
+/seed
+/test_*
+/demo_*
 # data is recreated by ./seed
 data/*.bin
