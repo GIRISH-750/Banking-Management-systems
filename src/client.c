@@ -154,12 +154,39 @@ static int amount_request(int fd, const char* cmd) {
     return 0;
 }
 
+/* Asks for receiver id + amount and sends TRANSFER. Returns -1 if the connection broke. */
+static int transfer_request(int fd) {
+    char id_s[32], amt_s[64], req[MAX_LINE_LEN], reply[MAX_LINE_LEN], extra;
+    int to;
+    float amount;
+    if (ask("To account ID: ", id_s, sizeof(id_s)) < 0) {
+        return -1;
+    }
+    if (ask("Amount: ", amt_s, sizeof(amt_s)) < 0) {
+        return -1;
+    }
+    if (sscanf(id_s, "%d %c", &to, &extra) != 1 || to < 1) {
+        printf("Invalid account ID.\n");
+        return 0;
+    }
+    if (sscanf(amt_s, "%f %c", &amount, &extra) != 1 || !(amount > 0)) {
+        printf("Enter a positive number.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "TRANSFER %d %.2f\n", to, amount);
+    if (request(fd, req, reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
 /* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
 static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
         printf("\n--- Customer %d ---\n", id);
-        printf("1. View balance\n2. Deposit\n3. Withdraw\n0. Logout\n");
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
@@ -173,6 +200,8 @@ static int customer_menu(int fd, int id) {
             r = amount_request(fd, "DEPOSIT");
         } else if (strcmp(choice, "3") == 0) {
             r = amount_request(fd, "WITHDRAW");
+        } else if (strcmp(choice, "4") == 0) {
+            r = transfer_request(fd);
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

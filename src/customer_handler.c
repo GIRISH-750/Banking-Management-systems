@@ -51,5 +51,16 @@ int handle_customer(int fd, int id, const char* line) {
         }
         return 1;
     }
+    if (strncmp(line, "TRANSFER", 8) == 0) {
+        int to;
+        char extra;
+        if (sscanf(line, "TRANSFER %d %f %c", &to, &amount, &extra) != 2) {
+            send_line(fd, "ERR Usage: TRANSFER <to_id> <amount>\n");
+        } else {
+            rc = op_transfer(id, to, amount, &balance);   /* from = session id */
+            reply(fd, rc, balance);
+        }
+        return 1;
+    }
     return 0;
 }
