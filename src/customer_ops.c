@@ -80,6 +80,64 @@ int op_withdraw(int id, float amount, float* balance) {
     return change_balance(id, amount, -1, balance);
 }
 
+int op_transfer(int from, int to, float amount, float* balance) {
+    if (from == to) {
+        return OP_SAME_ACCOUNT;
+    }
+    if (!(amount > 0.0f) || amount > MAX_AMOUNT) {
+        return OP_BAD_AMOUNT;
+    }
+
+    struct Customer src, dst;
+    int fd = customer_open();
+    if (fd < 0) {
+        return OP_ERROR;
+    }
+
+    /* Lock ordering: always lock the LOWER id first. If A->B and B->A run
+       together, both try the same record first, so one simply waits:
+       no circular wait, no deadlock. */
+    int first  = (from < to) ? from : to;
+    int second = (from < to) ? to : from;
+    lock_record(fd, first, sizeof(src), F_WRLCK);
+    lock_record(fd, second, sizeof(src), F_WRLCK);
+
+    int result;
+    int rs = customer_read(fd, from, &src);
+    int rd = customer_read(fd, to, &dst);
+
+    if (rs == STORE_ERROR || rd == STORE_ERROR) {
+        result = OP_ERROR;
+    } else if (rs == STORE_NOT_FOUND || rd == STORE_NOT_FOUND) {
+        result = OP_NOT_FOUND;
+    } else if (!is_active(&src) || !is_active(&dst)) {
+        result = OP_INACTIVE;
+    } else if (src.balance < amount) {
+        result = OP_NO_FUNDS;
+    } else {
+        /* All checks passed BEFORE any write, so a rule failure never
+           leaves a half-done transfer. */
+        float old_src = src.balance;
+        src.balance -= amount;
+        dst.balance += amount;
+        if (customer_write(fd, from, &src) != STORE_OK) {
+            result = OP_ERROR;                        /* nothing changed yet */
+        } else if (customer_write(fd, to, &dst) != STORE_OK) {
+            src.balance = old_src;                    /* undo the debit */
+            customer_write(fd, from, &src);
+            result = OP_ERROR;
+        } else {
+            *balance = src.balance;
+            result = OP_OK;
+        }
+    }
+
+    unlock_record(fd, second, sizeof(src));          /* unlock in reverse order */
+    unlock_record(fd, first, sizeof(src));
+    close(fd);
+    return result;
+}
+
 const char* op_message(int rc) {
     switch (rc) {
         case OP_OK:         return "OK";
@@ -87,6 +145,7 @@ const char* op_message(int rc) {
         case OP_INACTIVE:   return "ERR Account is inactive";
         case OP_BAD_AMOUNT: return "ERR Invalid amount";
         case OP_NO_FUNDS:   return "ERR Insufficient balance";
+        case OP_SAME_ACCOUNT: return "ERR Cannot transfer to the same account";
         default:            return "ERR Internal error";
     }
 }

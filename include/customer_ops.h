@@ -7,6 +7,7 @@
 #define OP_INACTIVE       2
 #define OP_BAD_AMOUNT     3
 #define OP_NO_FUNDS       4
+#define OP_SAME_ACCOUNT   5
 #define OP_ERROR         -1
 
 /* Each function does: open -> lock -> read -> (change -> write) -> unlock -> close.
@@ -14,6 +15,10 @@
 int op_balance(int id, float* balance);
 int op_deposit(int id, float amount, float* balance);
 int op_withdraw(int id, float amount, float* balance);
+
+/* Moves amount from `from` to `to`. Both records are locked (lower id first)
+   before either is changed. On OP_OK, *balance = sender's new balance. */
+int op_transfer(int from, int to, float amount, float* balance);
 
 /* Turns a result code into a reply line for the client. */
 const char* op_message(int rc);
