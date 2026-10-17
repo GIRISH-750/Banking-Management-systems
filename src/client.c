@@ -125,25 +125,88 @@ static int do_login(int fd, int* role_out, int* id_out) {
     return 0;
 }
 
-/* Menu shown after login. Role-specific features will be added here later.
-   Returns 0 = logged out (back to main menu), -1 = stop. */
-static int session_menu(int fd, int role, int id) {
+/* Sends LOGOUT. Returns 0 = logged out, -1 = connection lost. */
+static int do_logout(int fd) {
+    char reply[MAX_LINE_LEN];
+    if (request(fd, "LOGOUT\n", reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
+/* Asks for an amount and sends "<cmd> <amount>". Returns -1 if the connection broke. */
+static int amount_request(int fd, const char* cmd) {
+    char buf[64], req[MAX_LINE_LEN], reply[MAX_LINE_LEN], extra;
+    float amount;
+    if (ask("Amount: ", buf, sizeof(buf)) < 0) {
+        return -1;
+    }
+    if (sscanf(buf, "%f %c", &amount, &extra) != 1 || !(amount > 0)) {
+        printf("Enter a positive number.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "%s %.2f\n", cmd, amount);
+    if (request(fd, req, reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
+/* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
+static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
-        printf("\n--- %s %d ---\n", role_name(role), id);
-        printf("1. Logout\n");
+        printf("\n--- Customer %d ---\n", id);
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
+        int r = 0;
         if (strcmp(choice, "1") == 0) {
-            if (request(fd, "LOGOUT\n", reply, sizeof(reply)) < 0) {
-                return -1;
+            r = request(fd, "BALANCE\n", reply, sizeof(reply));
+            if (r == 0) {
+                printf("Server: %s\n", reply);
             }
-            printf("Server: %s\n", reply);
-            return 0;
+        } else if (strcmp(choice, "2") == 0) {
+            r = amount_request(fd, "DEPOSIT");
+        } else if (strcmp(choice, "3") == 0) {
+            r = amount_request(fd, "WITHDRAW");
+        } else if (strcmp(choice, "0") == 0) {
+            return do_logout(fd);
+        } else {
+            printf("Invalid choice.\n");
+        }
+        if (r < 0) {
+            return -1;
+        }
+    }
+}
+
+/* Menu for roles whose features are not built yet. */
+static int basic_menu(int fd, int role, int id) {
+    char choice[16];
+    while (1) {
+        printf("\n--- %s %d ---\n", role_name(role), id);
+        printf("0. Logout\n");
+        if (ask("Choice: ", choice, sizeof(choice)) < 0) {
+            return -1;
+        }
+        if (strcmp(choice, "0") == 0) {
+            return do_logout(fd);
         }
         printf("Invalid choice.\n");
     }
+}
+
+/* Picks the menu for the logged-in role.
+   Returns 0 = logged out (back to main menu), -1 = stop. */
+static int session_menu(int fd, int role, int id) {
+    if (role == 4) {
+        return customer_menu(fd, id);
+    }
+    return basic_menu(fd, role, id);
 }
 
 int main(int argc, char* argv[]) {

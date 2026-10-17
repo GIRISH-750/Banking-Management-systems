@@ -1,8 +1,8 @@
-test_counter
-*.o
-test_hash
-seed
-test_auth
-test_auth
+# compiled programs
 server
 client
+seed
+test_*
+!tests/
+# data is recreated by ./seed
+data/*.bin

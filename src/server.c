@@ -12,6 +12,7 @@
 #include "auth.h"
 #include "net_util.h"
 #include "session.h"
+#include "customer_handler.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -54,6 +55,11 @@ static void* client_thread(void* arg) {
                 logged_in = 0;
                 send_line(fd, "OK Logged out\n");
             }
+            continue;
+        }
+
+        /* customer commands: id is taken from the session, not from the client */
+        if (logged_in && cur_role == ROLE_CUSTOMER && handle_customer(fd, cur_id, line)) {
             continue;
         }
 
