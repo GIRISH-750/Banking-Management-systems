@@ -181,12 +181,37 @@ static int transfer_request(int fd) {
     return 0;
 }
 
+/* Sends HISTORY, then reads "OK <n>" and n more lines. -1 if the connection broke. */
+static int history_request(int fd) {
+    char reply[MAX_LINE_LEN];
+    int n;
+    if (request(fd, "HISTORY\n", reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    if (sscanf(reply, "OK %d", &n) != 1) {
+        printf("Server: %s\n", reply);
+        return 0;
+    }
+    if (n == 0) {
+        printf("No transactions yet.\n");
+        return 0;
+    }
+    printf("Last %d transaction(s):\n", n);
+    for (int i = 0; i < n; i++) {
+        if (read_line(fd, reply, sizeof(reply)) <= 0) {
+            return -1;
+        }
+        printf("  %s\n", reply);
+    }
+    return 0;
+}
+
 /* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
 static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
         printf("\n--- Customer %d ---\n", id);
-        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n0. Logout\n");
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
@@ -202,6 +227,8 @@ static int customer_menu(int fd, int id) {
             r = amount_request(fd, "WITHDRAW");
         } else if (strcmp(choice, "4") == 0) {
             r = transfer_request(fd);
+        } else if (strcmp(choice, "5") == 0) {
+            r = history_request(fd);
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {
