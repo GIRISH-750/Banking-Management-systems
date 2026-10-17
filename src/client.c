@@ -162,12 +162,12 @@ static int transfer_request(int fd) {
     if (ask("To account ID: ", id_s, sizeof(id_s)) < 0) {
         return -1;
     }
+    if (sscanf(id_s, "%d %c", &to, &extra) != 1 || to < 1) {
+        printf("Invalid account ID.\n");   /* bad format: stop before asking the amount */
+        return 0;
+    }
     if (ask("Amount: ", amt_s, sizeof(amt_s)) < 0) {
         return -1;
-    }
-    if (sscanf(id_s, "%d %c", &to, &extra) != 1 || to < 1) {
-        printf("Invalid account ID.\n");
-        return 0;
     }
     if (sscanf(amt_s, "%f %c", &amount, &extra) != 1 || !(amount > 0)) {
         printf("Enter a positive number.\n");
