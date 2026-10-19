@@ -118,18 +118,33 @@ int adm_delete_employee(int id) {
     return rc;
 }
 
-/* Soft delete: balance must be 0 and no open loan. */
+/* Soft delete: balance must be 0 and no open loan.
+   Lock order rule: loans.bin BEFORE customers.bin (same as loan approval),
+   otherwise delete + approve can deadlock. The read lock on loans.bin
+   also stops a new loan application for this customer during the delete. */
 int adm_delete_customer(int id) {
     if (id <= 0) {
         return ADM_BAD_INPUT;
     }
+    int lfd = open(LOANS_FILE, O_RDWR | O_CREAT, 0644);
+    if (lfd < 0) {
+        return ADM_ERROR;
+    }
+    if (lock_file(lfd, F_RDLCK) < 0) {
+        close(lfd);
+        return ADM_ERROR;
+    }
     int fd = customer_open();
     if (fd < 0) {
+        unlock_file(lfd);
+        close(lfd);
         return ADM_ERROR;
     }
     struct Customer c;
     if (lock_record(fd, id, sizeof(c), F_WRLCK) < 0) {
         close(fd);
+        unlock_file(lfd);
+        close(lfd);
         return ADM_ERROR;
     }
     int rc;
@@ -154,6 +169,8 @@ int adm_delete_customer(int id) {
     }
     unlock_record(fd, id, sizeof(c));
     close(fd);
+    unlock_file(lfd);          /* released last: reverse of lock order */
+    close(lfd);
     return rc;
 }
 
