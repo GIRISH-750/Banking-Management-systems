@@ -13,6 +13,7 @@
 #include "net_util.h"
 #include "session.h"
 #include "customer_handler.h"
+#include "employee_handler.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -60,6 +61,10 @@ static void* client_thread(void* arg) {
 
         /* customer commands: id is taken from the session, not from the client */
         if (logged_in && cur_role == ROLE_CUSTOMER && handle_customer(fd, cur_id, line)) {
+            continue;
+        }
+        /* employee commands: id is taken from the session, not from the client */
+        if (logged_in && cur_role == ROLE_EMPLOYEE && handle_employee(fd, cur_id, line)) {
             continue;
         }
 

@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -271,6 +272,114 @@ static int customer_menu(int fd, int id) {
 }
 
 /* Menu for roles whose features are not built yet. */
+
+/* ---------- Employee menu ---------- */
+
+/* 1 = ok, 0 = invalid (message printed), -1 = input ended */
+static int ask_id(const char* prompt, int* out) {
+    char buf[32], *end;
+    if (ask(prompt, buf, sizeof(buf)) < 0) {
+        return -1;
+    }
+    long v = strtol(buf, &end, 10);
+    if (buf[0] == '\0' || *end != '\0' || v <= 0 || v > 1000000) {
+        printf("Invalid ID.\n");
+        return 0;
+    }
+    *out = (int)v;
+    return 1;
+}
+
+/* 1 = ok: not empty, at most max chars, no spaces */
+static int valid_word(const char* s, size_t max) {
+    return s[0] != '\0' && strlen(s) <= max && !has_space(s);
+}
+
+static int add_customer_request(int fd) {
+    char first[128], last[128], pw[128], req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    if (ask("First name: ", first, sizeof(first)) < 0) return -1;
+    if (ask("Last name: ", last, sizeof(last)) < 0) return -1;
+    if (ask("Initial password: ", pw, sizeof(pw)) < 0) return -1;
+    if (!valid_word(first, 49) || !valid_word(last, 49)) {
+        printf("Names must be 1-49 characters, no spaces.\n");
+        return 0;
+    }
+    if (strlen(pw) < 4 || !valid_word(pw, 63)) {
+        printf("Password must be 4-63 characters, no spaces.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "ADD_CUSTOMER %.49s %.49s %.63s\n", first, last, pw);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    int new_id;
+    if (sscanf(reply, "OK %d", &new_id) == 1) {
+        printf("Customer created. New customer ID: %d\n", new_id);
+    } else {
+        printf("Server: %s\n", reply);
+    }
+    return 0;
+}
+
+static int modify_customer_request(int fd) {
+    char first[128], last[128], req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    int cid, r = ask_id("Customer ID: ", &cid);
+    if (r <= 0) return r;
+    if (ask("New first name: ", first, sizeof(first)) < 0) return -1;
+    if (ask("New last name: ", last, sizeof(last)) < 0) return -1;
+    if (!valid_word(first, 49) || !valid_word(last, 49)) {
+        printf("Names must be 1-49 characters, no spaces.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "MODIFY_CUSTOMER %d %.49s %.49s\n", cid, first, last);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
+static int passbook_request(int fd) {
+    char req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    int cid, n, r = ask_id("Customer ID: ", &cid);
+    if (r <= 0) return r;
+    snprintf(req, sizeof(req), "PASSBOOK %d\n", cid);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    if (sscanf(reply, "OK %d", &n) != 1) {
+        printf("Server: %s\n", reply);
+        return 0;
+    }
+    if (n == 0) {
+        printf("No transactions yet.\n");
+        return 0;
+    }
+    printf("Passbook of customer %d (%d transaction(s)):\n", cid, n);
+    for (int i = 0; i < n; i++) {
+        if (read_line(fd, reply, sizeof(reply)) <= 0) return -1;
+        printf("  %s\n", reply);
+    }
+    return 0;
+}
+
+/* Returns 0 = logged out (back to main menu), -1 = stop. */
+static int employee_menu(int fd, int id) {
+    char choice[16];
+    while (1) {
+        printf("\n--- Employee %d ---\n", id);
+        printf("1. Add customer\n2. Modify customer\n3. View customer passbook\n0. Logout\n");
+        if (ask("Choice: ", choice, sizeof(choice)) < 0) return -1;
+        int r;
+        if (strcmp(choice, "1") == 0) {
+            r = add_customer_request(fd);
+        } else if (strcmp(choice, "2") == 0) {
+            r = modify_customer_request(fd);
+        } else if (strcmp(choice, "3") == 0) {
+            r = passbook_request(fd);
+        } else if (strcmp(choice, "0") == 0) {
+            return do_logout(fd);
+        } else {
+            printf("Invalid choice.\n");
+            continue;
+        }
+        if (r < 0) return -1;
+    }
+}
 static int basic_menu(int fd, int role, int id) {
     char choice[16];
     while (1) {
@@ -289,6 +398,9 @@ static int basic_menu(int fd, int role, int id) {
 /* Picks the menu for the logged-in role.
    Returns 0 = logged out (back to main menu), -1 = stop. */
 static int session_menu(int fd, int role, int id) {
+    if (role == 3) {
+        return employee_menu(fd, id);
+    }
     if (role == 4) {
         return customer_menu(fd, id);
     }
