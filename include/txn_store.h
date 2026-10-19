@@ -10,6 +10,7 @@
 #define TXN_WITHDRAW      "WITHDRAW"
 #define TXN_TRANSFER_OUT  "TRANSFER_OUT"
 #define TXN_TRANSFER_IN   "TRANSFER_IN"
+#define TXN_LOAN_CREDIT   "LOAN_CREDIT"
 
 /* Appends one transaction (new ID from counter.bin, current time).
    Returns 0 on success, -1 on error. */

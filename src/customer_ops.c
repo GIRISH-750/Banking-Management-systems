@@ -10,7 +10,7 @@
 #define MAX_AMOUNT 1000000.0f   /* refuse absurd amounts in one go */
 
 static int is_active(const struct Customer* c) {
-    return strcmp(c->status, "ACTIVE") == 0;
+    return strcmp(c->status, ST_ACTIVE) == 0;
 }
 
 int op_balance(int id, float* balance) {

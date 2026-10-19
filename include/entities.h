@@ -7,7 +7,16 @@
 #define STATUS_LEN 15
 #define TYPE_LEN 15
 #define TIMESTAMP_LEN 20
-#define MAX_ASSIGNED_LOANS 50   // TODO: confirm this cap with TA
+
+/* Account status (Employee, Manager, Customer) */
+#define ST_ACTIVE   "ACTIVE"
+#define ST_INACTIVE "INACTIVE"
+
+/* Loan status: PENDING -> ASSIGNED -> APPROVED / REJECTED */
+#define LOAN_PENDING  "PENDING"
+#define LOAN_ASSIGNED "ASSIGNED"
+#define LOAN_APPROVED "APPROVED"
+#define LOAN_REJECTED "REJECTED"
 
 struct Admin {
     int adminID;
@@ -21,16 +30,17 @@ struct Manager {
     char first_name[NAME_LEN];
     char last_name[NAME_LEN];
     char password[PASS_LEN];
+    char status[STATUS_LEN];       /* INACTIVE after demotion */
 };
 
+/* No assigned_loans[] here: an employee's loans are found by scanning
+   loans.bin for assignedEmpID == employeeID (one source of truth). */
 struct Employee {
     int employeeID;
     char first_name[NAME_LEN];
     char last_name[NAME_LEN];
     char password[PASS_LEN];
-    char status[STATUS_LEN];
-    int assigned_loans[MAX_ASSIGNED_LOANS];
-    int loan_count;
+    char status[STATUS_LEN];       /* INACTIVE after promotion */
 };
 
 struct Customer {
@@ -45,9 +55,10 @@ struct Customer {
 
 struct Loan {
     int loanID;
-    int userID;
+    int userID;                    /* customer who applied */
     float amount;
     char status[STATUS_LEN];
+    int assignedEmpID;             /* 0 = not assigned yet */
 };
 
 struct Feedback {

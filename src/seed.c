@@ -48,14 +48,14 @@ int main(void) {
     strncpy(managers[0].first_name, "Manager", NAME_LEN - 1);
     strncpy(managers[0].last_name, "One", NAME_LEN - 1);
     hash_password("manager123", managers[0].password);
+    strncpy(managers[0].status, ST_ACTIVE, STATUS_LEN - 1);
 
     /* Employee: ID 1 */
     employees[0].employeeID = 1;
     strncpy(employees[0].first_name, "Employee", NAME_LEN - 1);
     strncpy(employees[0].last_name, "One", NAME_LEN - 1);
     hash_password("emp123", employees[0].password);
-    strncpy(employees[0].status, "ACTIVE", STATUS_LEN - 1);
-    employees[0].loan_count = 0;
+    strncpy(employees[0].status, ST_ACTIVE, STATUS_LEN - 1);
 
     /* Customers: ID 1 and 2 */
     customers[0].userID = 1;
@@ -64,7 +64,7 @@ int main(void) {
     hash_password("alice123", customers[0].password);
     customers[0].balance = 5000.0f;
     customers[0].loan = 0.0f;
-    strncpy(customers[0].status, "ACTIVE", STATUS_LEN - 1);
+    strncpy(customers[0].status, ST_ACTIVE, STATUS_LEN - 1);
 
     customers[1].userID = 2;
     strncpy(customers[1].firstName, "Bob", NAME_LEN - 1);
@@ -72,7 +72,7 @@ int main(void) {
     hash_password("bob123", customers[1].password);
     customers[1].balance = 10000.0f;
     customers[1].loan = 0.0f;
-    strncpy(customers[1].status, "ACTIVE", STATUS_LEN - 1);
+    strncpy(customers[1].status, ST_ACTIVE, STATUS_LEN - 1);
 
     /* Counter: next free ID for each entity */
     counter.next_admin_id = 2;

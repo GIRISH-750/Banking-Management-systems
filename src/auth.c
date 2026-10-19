@@ -69,6 +69,9 @@ int authenticate(int role, int id, const char* password) {
         if (!password_matches(m.password, password)) {
             return AUTH_WRONG_PASSWORD;
         }
+        if (strcmp(m.status, ST_ACTIVE) != 0) {
+            return AUTH_INACTIVE;
+        }
         return AUTH_OK;
     }
 
@@ -84,7 +87,7 @@ int authenticate(int role, int id, const char* password) {
         if (!password_matches(e.password, password)) {
             return AUTH_WRONG_PASSWORD;
         }
-        if (strcmp(e.status, "ACTIVE") != 0) {
+        if (strcmp(e.status, ST_ACTIVE) != 0) {
             return AUTH_INACTIVE;
         }
         return AUTH_OK;
@@ -102,7 +105,7 @@ int authenticate(int role, int id, const char* password) {
         if (!password_matches(c.password, password)) {
             return AUTH_WRONG_PASSWORD;
         }
-        if (strcmp(c.status, "ACTIVE") != 0) {
+        if (strcmp(c.status, ST_ACTIVE) != 0) {
             return AUTH_INACTIVE;
         }
         return AUTH_OK;
