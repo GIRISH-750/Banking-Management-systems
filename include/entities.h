@@ -11,6 +11,7 @@
 /* Account status (Employee, Manager, Customer) */
 #define ST_ACTIVE   "ACTIVE"
 #define ST_INACTIVE "INACTIVE"
+#define ST_DELETED  "DELETED"
 
 /* Loan status: PENDING -> ASSIGNED -> APPROVED / REJECTED */
 #define LOAN_PENDING  "PENDING"
