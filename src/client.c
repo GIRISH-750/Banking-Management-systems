@@ -206,12 +206,40 @@ static int history_request(int fd) {
     return 0;
 }
 
+/* Asks old + new password (new one twice) and sends PASSWD. -1 if the connection broke. */
+static int password_request(int fd) {
+    char old_pw[128], new_pw[128], again[128], req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    if (ask("Old password: ", old_pw, sizeof(old_pw)) < 0) {
+        return -1;
+    }
+    if (ask("New password: ", new_pw, sizeof(new_pw)) < 0) {
+        return -1;
+    }
+    if (ask("Repeat new password: ", again, sizeof(again)) < 0) {
+        return -1;
+    }
+    if (strcmp(new_pw, again) != 0) {
+        printf("Passwords do not match.\n");
+        return 0;
+    }
+    if (old_pw[0] == '\0' || strlen(old_pw) > 63 || strlen(new_pw) < 4 || strlen(new_pw) > 63 || has_space(new_pw) || has_space(old_pw)) {
+        printf("Password must be 4-63 characters, no spaces.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "PASSWD %.63s %.63s\n", old_pw, new_pw);   /* %.63s = at most 63 chars */
+    if (request(fd, req, reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
 /* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
 static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
         printf("\n--- Customer %d ---\n", id);
-        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n0. Logout\n");
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n6. Change password\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
@@ -229,6 +257,8 @@ static int customer_menu(int fd, int id) {
             r = transfer_request(fd);
         } else if (strcmp(choice, "5") == 0) {
             r = history_request(fd);
+        } else if (strcmp(choice, "6") == 0) {
+            r = password_request(fd);
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

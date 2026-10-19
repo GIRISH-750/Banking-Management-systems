@@ -5,6 +5,7 @@
 #include "customer_store.h"
 #include "lock.h"
 #include "txn_store.h"
+#include "hash.h"
 
 #define MAX_AMOUNT 1000000.0f   /* refuse absurd amounts in one go */
 
@@ -144,6 +145,40 @@ int op_transfer(int from, int to, float amount, float* balance) {
     return result;
 }
 
+int op_change_password(int id, const char* old_pw, const char* new_pw) {
+    size_t len = strlen(new_pw);
+    if (len < 4 || len > 63 || strcmp(old_pw, new_pw) == 0) {
+        return OP_BAD_PASSWORD;            /* too short/long, or same as old */
+    }
+
+    struct Customer c;
+    int fd = customer_open();
+    if (fd < 0) {
+        return OP_ERROR;
+    }
+
+    lock_record(fd, id, sizeof(c), F_WRLCK);
+    int result;
+    int rc = customer_read(fd, id, &c);
+    char old_hash[HASH_HEX_LEN];
+    hash_password(old_pw, old_hash);
+
+    if (rc == STORE_NOT_FOUND) {
+        result = OP_NOT_FOUND;
+    } else if (rc != STORE_OK) {
+        result = OP_ERROR;
+    } else if (strncmp(c.password, old_hash, PASS_LEN) != 0) {
+        result = OP_WRONG_PASSWORD;        /* must prove they know the old one */
+    } else {
+        hash_password(new_pw, c.password); /* store the hash, never the text */
+        result = (customer_write(fd, id, &c) == STORE_OK) ? OP_OK : OP_ERROR;
+    }
+
+    unlock_record(fd, id, sizeof(c));
+    close(fd);
+    return result;
+}
+
 const char* op_message(int rc) {
     switch (rc) {
         case OP_OK:         return "OK";
@@ -152,6 +187,8 @@ const char* op_message(int rc) {
         case OP_BAD_AMOUNT: return "ERR Invalid amount";
         case OP_NO_FUNDS:   return "ERR Insufficient balance";
         case OP_SAME_ACCOUNT: return "ERR Cannot transfer to the same account";
+        case OP_WRONG_PASSWORD: return "ERR Old password is wrong";
+        case OP_BAD_PASSWORD: return "ERR New password must be 4-63 characters, no spaces, and different from the old one";
         default:            return "ERR Internal error";
     }
 }

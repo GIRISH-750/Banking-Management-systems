@@ -54,6 +54,22 @@ int handle_customer(int fd, int id, const char* line) {
         }
         return 1;
     }
+    if (strncmp(line, "PASSWD", 6) == 0) {
+        char old_pw[64], new_pw[64], extra;
+        if (sscanf(line, "PASSWD %63s %63s %c", old_pw, new_pw, &extra) != 2) {
+            send_line(fd, "ERR Usage: PASSWD <old> <new>\n");
+            return 1;
+        }
+        rc = op_change_password(id, old_pw, new_pw);
+        if (rc == OP_OK) {
+            send_line(fd, "OK Password changed\n");
+        } else {
+            char msg[MAX_LINE_LEN];
+            snprintf(msg, sizeof(msg), "%s\n", op_message(rc));
+            send_line(fd, msg);
+        }
+        return 1;
+    }
     if (strcmp(line, "HISTORY") == 0) {
         /* Multi-line reply: "OK <n>" first, then exactly n lines.
            The count tells the client how many lines to read next. */
