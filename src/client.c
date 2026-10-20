@@ -235,12 +235,53 @@ static int password_request(int fd) {
     return 0;
 }
 
+/* Sends cmd, then reads "OK <n>" and n more lines (generic list reply).
+   Used for MY_LOANS, pending loans, assigned loans. -1 if connection broke. */
+static int list_request(int fd, const char* cmd, const char* title, const char* empty_msg) {
+    char req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    int n;
+    snprintf(req, sizeof(req), "%s\n", cmd);
+    if (request(fd, req, reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    if (sscanf(reply, "OK %d", &n) != 1) {
+        printf("Server: %s\n", reply);
+        return 0;
+    }
+    if (n == 0) {
+        printf("%s\n", empty_msg);
+        return 0;
+    }
+    printf("%s (%d):\n", title, n);
+    for (int i = 0; i < n; i++) {
+        if (read_line(fd, reply, sizeof(reply)) <= 0) {
+            return -1;
+        }
+        printf("  %s\n", reply);
+    }
+    return 0;
+}
+
+/* Asks the server first, so a customer with an open loan is told at once
+   instead of after typing an amount. */
+static int loan_apply_request(int fd) {
+    char reply[MAX_LINE_LEN];
+    if (request(fd, "LOAN_CHECK\n", reply, sizeof(reply)) < 0) {
+        return -1;
+    }
+    if (strncmp(reply, "OK", 2) != 0) {
+        printf("Server: %s\n", reply);
+        return 0;
+    }
+    return amount_request(fd, "LOAN_APPLY");
+}
+
 /* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
 static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
         printf("\n--- Customer %d ---\n", id);
-        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n6. Change password\n0. Logout\n");
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n6. Change password\n7. Apply for loan\n8. My loans\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
@@ -260,6 +301,10 @@ static int customer_menu(int fd, int id) {
             r = history_request(fd);
         } else if (strcmp(choice, "6") == 0) {
             r = password_request(fd);
+        } else if (strcmp(choice, "7") == 0) {
+            r = loan_apply_request(fd);
+        } else if (strcmp(choice, "8") == 0) {
+            r = list_request(fd, "MY_LOANS", "Your loans", "No loans yet.");
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

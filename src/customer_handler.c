@@ -5,6 +5,8 @@
 #include "txn_store.h"
 #include "net_util.h"
 #include "config.h"
+#include "loan_ops.h"
+#include "loan_store.h"
 
 #define HISTORY_MAX 10   /* show the last 10 transactions */
 
@@ -25,9 +27,66 @@ static void reply(int fd, int rc, float balance) {
     send_line(fd, msg);
 }
 
+#define LOANS_SHOW_MAX 20
+
+/* Customer loan commands. Returns 1 if the line was a loan command. */
+static int handle_loan_cmd(int fd, int id, const char* line) {
+    char msg[MAX_LINE_LEN];
+    if (strncmp(line, "LOAN_APPLY", 10) == 0) {
+        float amount;
+        int loan_id = 0;
+        if (!parse_amount(line, "LOAN_APPLY", &amount)) {
+            send_line(fd, "ERR Usage: LOAN_APPLY <amount>\n");
+            return 1;
+        }
+        int rc = loan_apply(id, amount, &loan_id);     /* id = logged-in user */
+        if (rc == LN_OK) {
+            snprintf(msg, sizeof(msg), "OK Loan %d applied, status PENDING\n", loan_id);
+        } else {
+            snprintf(msg, sizeof(msg), "%s\n", loan_message(rc));
+        }
+        send_line(fd, msg);
+        return 1;
+    }
+    if (strcmp(line, "LOAN_CHECK") == 0) {
+        /* UX only: early hint before asking the amount. The real check
+           is repeated inside loan_apply() under the loans.bin lock. */
+        int n = loans_open_of_customer(id);
+        if (n < 0) {
+            send_line(fd, "ERR Internal error\n");
+        } else if (n > 0) {
+            send_line(fd, "ERR You already have an open loan (PENDING or ASSIGNED)\n");
+        } else {
+            send_line(fd, "OK You can apply\n");
+        }
+        return 1;
+    }
+    if (strcmp(line, "MY_LOANS") == 0) {
+        struct Loan l[LOANS_SHOW_MAX];
+        int n = loan_list_customer(id, l, LOANS_SHOW_MAX);
+        if (n < 0) {
+            send_line(fd, "ERR Internal error\n");
+            return 1;
+        }
+        snprintf(msg, sizeof(msg), "OK %d\n", n);       /* same format as HISTORY */
+        send_line(fd, msg);
+        for (int i = 0; i < n; i++) {
+            snprintf(msg, sizeof(msg), "Loan %-4d  %10.2f  %-9s  employee %d\n",
+                     l[i].loanID, l[i].amount, l[i].status, l[i].assignedEmpID);
+            send_line(fd, msg);
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int handle_customer(int fd, int id, const char* line) {
     float amount, balance = 0;
     int rc;
+
+    if (handle_loan_cmd(fd, id, line)) {
+        return 1;
+    }
 
     /* rc is stored first on purpose: in reply(fd, op_x(..., &balance), balance)
        C may read `balance` BEFORE op_x runs (argument order is unspecified). */
