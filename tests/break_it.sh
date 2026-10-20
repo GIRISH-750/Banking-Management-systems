@@ -11,7 +11,7 @@ gcc -Wall -Wextra -Iinclude src/hash.c src/seed.c -o seed -lcrypto || exit 1
 gcc -Wall -Wextra -Iinclude src/server.c src/auth.c src/hash.c src/net_util.c src/session.c \
     src/customer_handler.c src/customer_ops.c src/customer_store.c src/lock.c \
     src/txn_store.c src/counter.c -o server -pthread -lcrypto || exit 1
-./seed > /dev/null
+./seed test > /dev/null
 ./server > /tmp/break_server.log 2>&1 &
 SERVER=$!
 sleep 0.5
@@ -75,5 +75,5 @@ else
 fi
 
 kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null
-./seed > /dev/null
+./seed test > /dev/null
 echo "$pass/$total passed"

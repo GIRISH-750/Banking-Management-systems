@@ -5,7 +5,7 @@ pass=0; fail=0
 fresh_data() {
     pkill -x server 2>/dev/null; sleep 0.3
     rm -f data/loans.bin data/feedback.bin data/journal.bin
-    ./seed > /dev/null
+    ./seed test > /dev/null
 }
 start() { BANK_CRASH="$1" ./server > /tmp/server.log 2>&1 & SP=$!; sleep 0.5; }
 stop() { kill $SP 2>/dev/null; wait $SP 2>/dev/null; }

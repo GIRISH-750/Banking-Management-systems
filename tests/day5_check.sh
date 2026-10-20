@@ -6,7 +6,7 @@ pass=0; fail=0
 fresh_data() {
     pkill -x server 2>/dev/null; sleep 0.3
     rm -f data/loans.bin data/feedback.bin     # seed does not reset these (fix on Day 6)
-    ./seed > /dev/null
+    ./seed test > /dev/null
 }
 start_server() {
     fresh_data

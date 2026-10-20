@@ -30,7 +30,72 @@ static int one_id(int fd, const char* line, const char* cmd, int* id) {
     return 1;
 }
 
+#include <fcntl.h>
+#include <unistd.h>
+#include "config.h"
+#include "net_util.h"
+#include "rec_store.h"
+#include "lock.h"
+#include "entities.h"
+
+#define STAFF_MAX 200
+
+/* Reads up to max records under a whole-file READ lock. Returns count or -1. */
+static int read_all(const char* path, void* out, size_t size, int max) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return -1;
+    }
+    if (lock_file(fd, F_RDLCK) < 0) {
+        close(fd);
+        return -1;
+    }
+    int n = 0;
+    while (n < max && pread(fd, (char*)out + (size_t)n * size, size, (off_t)n * (off_t)size) == (ssize_t)size) {
+        n++;
+    }
+    unlock_file(fd);
+    close(fd);
+    return n;
+}
+
+/* LIST_STAFF: every employee and manager with status (empty slots skipped). */
+static void list_staff(int fd) {
+    static struct Employee e[STAFF_MAX];
+    static struct Manager m[STAFF_MAX];
+    char msg[MAX_LINE_LEN];
+    int ne = read_all(EMPLOYEES_FILE, e, sizeof(e[0]), STAFF_MAX);
+    int nm = read_all(MANAGERS_FILE, m, sizeof(m[0]), STAFF_MAX);
+    if (ne < 0 || nm < 0) {
+        send_line(fd, "ERR Internal error\n");
+        return;
+    }
+    int total = 0;
+    for (int i = 0; i < ne; i++) total += (e[i].employeeID > 0);
+    for (int i = 0; i < nm; i++) total += (m[i].managerID > 0);
+    snprintf(msg, sizeof(msg), "OK %d\n", total);
+    send_line(fd, msg);
+    for (int i = 0; i < nm; i++) {
+        if (m[i].managerID > 0) {
+            snprintf(msg, sizeof(msg), "Manager  %-3d %-10s %-10s %s\n",
+                     m[i].managerID, m[i].first_name, m[i].last_name, m[i].status);
+            send_line(fd, msg);
+        }
+    }
+    for (int i = 0; i < ne; i++) {
+        if (e[i].employeeID > 0) {
+            snprintf(msg, sizeof(msg), "Employee %-3d %-10s %-10s %s\n",
+                     e[i].employeeID, e[i].first_name, e[i].last_name, e[i].status);
+            send_line(fd, msg);
+        }
+    }
+}
+
 int handle_admin(int fd, int id, const char* line) {
+    if (strcmp(line, "LIST_STAFF") == 0) {
+        list_staff(fd);
+        return 1;
+    }
     (void)id;
     char first[64], last[64], pw[64], msg[MAX_LINE_LEN], extra;
     int tid, new_id, rc;

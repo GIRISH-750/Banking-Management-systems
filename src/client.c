@@ -285,7 +285,7 @@ static int feedback_request(int fd) {
         printf("Feedback must be 1-199 characters.\n");
         return 0;
     }
-    snprintf(req, sizeof(req), "FEEDBACK %s\n", text);
+    snprintf(req, sizeof(req), "FEEDBACK %.199s\n", text);
     if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
     printf("Server: %s\n", reply);
     return 0;
@@ -541,7 +541,7 @@ static int admin_menu(int fd, int id) {
         printf("\n--- Admin %d ---\n", id);
         printf("1. Add employee\n2. Modify employee\n3. Promote employee to manager\n"
                "4. Demote manager to employee\n5. Delete employee\n6. View customer\n"
-               "7. Modify customer\n8. Delete customer\n9. Change password\n0. Logout\n");
+               "7. Modify customer\n8. Delete customer\n9. Change password\n10. List staff\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) return -1;
         int r;
         if (strcmp(choice, "1") == 0) {
@@ -562,6 +562,8 @@ static int admin_menu(int fd, int id) {
             r = id_command(fd, "DELETE_CUSTOMER", "Customer ID: ", NULL);
         } else if (strcmp(choice, "9") == 0) {
             r = password_request(fd);
+        } else if (strcmp(choice, "10") == 0) {
+            r = list_request(fd, "LIST_STAFF", "Staff", "No staff.");
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Smoke test for the admin module. Run: bash tests/admin_smoke.sh
 pkill -x server 2>/dev/null; sleep 0.3
-./seed > /dev/null
+./seed test > /dev/null
 ./server > /tmp/server.log 2>&1 &
 SP=$!
 sleep 0.5
