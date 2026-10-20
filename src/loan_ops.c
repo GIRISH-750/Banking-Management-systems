@@ -13,7 +13,7 @@
 /* LOCK ORDER (whole project): employees -> loans -> customers.
    counter.bin is a leaf lock: taken last, released at once. */
 
-enum { SCAN_OPEN_OF_CUST, SCAN_ALL_OF_CUST, SCAN_PENDING, SCAN_ASSIGNED_TO };
+enum { SCAN_OPEN_OF_CUST, SCAN_ALL_OF_CUST, SCAN_PENDING, SCAN_ASSIGNED_TO, SCAN_ALL };
 
 static void set_str(char* dst, const char* src, size_t len) {
     strncpy(dst, src, len - 1);
@@ -31,6 +31,7 @@ static int matches(const struct Loan* l, int mode, int id) {
     case SCAN_ALL_OF_CUST:  return l->userID == id;
     case SCAN_PENDING:      return pending;
     case SCAN_ASSIGNED_TO:  return assigned && l->assignedEmpID == id;
+    case SCAN_ALL:          return 1;
     }
     return 0;
 }
@@ -220,4 +221,9 @@ int loan_assign(int loan_id, int emp_id) {
     unlock_record(efd, emp_id, sizeof(e));
     close(efd);
     return rc;
+}
+
+/* Manager: every loan, any status (supervisor view). Read-only. */
+int loan_list_all(struct Loan* out, int max) {
+    return list_loans(SCAN_ALL, 0, out, max);
 }

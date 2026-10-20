@@ -21,6 +21,7 @@ int loan_apply(int cust_id, float amount, int* loan_id);
 int loan_list_customer(int cust_id, struct Loan* out, int max);
 int loan_list_pending(struct Loan* out, int max);
 int loan_list_assigned(int emp_id, struct Loan* out, int max);
+int loan_list_all(struct Loan* out, int max);
 /* Manager: PENDING -> ASSIGNED to an ACTIVE employee. */
 int loan_assign(int loan_id, int emp_id);
 /* Employee: ASSIGNED -> APPROVED (approve=1) or REJECTED (approve=0). */

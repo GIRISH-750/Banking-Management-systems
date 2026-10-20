@@ -559,7 +559,7 @@ static int manager_menu(int fd, int id) {
         printf("1. View pending loans\n2. Assign loan to employee\n"
                "3. Activate customer\n4. Deactivate customer\n"
                "5. View feedback\n6. Mark feedback reviewed\n"
-               "7. Change password\n0. Logout\n");
+               "7. Change password\n8. View all loans\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) return -1;
         int r = 0;
         if (strcmp(choice, "1") == 0) {
@@ -576,6 +576,8 @@ static int manager_menu(int fd, int id) {
             r = id_command(fd, "FEEDBACK_REVIEW", "Feedback ID: ", NULL);
         } else if (strcmp(choice, "7") == 0) {
             r = password_request(fd);
+        } else if (strcmp(choice, "8") == 0) {
+            r = list_request(fd, "ALL_LOANS", "All loans", "No loans yet.");
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

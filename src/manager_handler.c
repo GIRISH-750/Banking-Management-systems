@@ -26,6 +26,22 @@ int handle_manager(int fd, int id, const char* line) {
         }
         return 1;
     }
+    if (strcmp(line, "ALL_LOANS") == 0) {
+        struct Loan l[PENDING_SHOW_MAX];
+        int n = loan_list_all(l, PENDING_SHOW_MAX);
+        if (n < 0) {
+            send_line(fd, "ERR Internal error\n");
+            return 1;
+        }
+        snprintf(msg, sizeof(msg), "OK %d\n", n);
+        send_line(fd, msg);
+        for (int i = 0; i < n; i++) {
+            snprintf(msg, sizeof(msg), "Loan %-4d  customer %-4d  %10.2f  %-9s  employee %d\n",
+                     l[i].loanID, l[i].userID, l[i].amount, l[i].status, l[i].assignedEmpID);
+            send_line(fd, msg);
+        }
+        return 1;
+    }
     if (strncmp(line, "ASSIGN", 6) == 0) {
         int loan_id, emp_id;
         char extra;
