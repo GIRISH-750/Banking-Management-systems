@@ -153,6 +153,71 @@ const char* loan_message(int rc) {
     case LN_BAD_STATE:    return "ERR Loan is not in the right status for this action";
     case LN_NOT_YOURS:    return "ERR This loan is not assigned to you";
     case LN_EMP_INACTIVE: return "ERR Employee is not active";
+    case LN_EMP_NOT_FOUND: return "ERR Employee not found";
     default:              return "ERR Internal error";
     }
+}
+
+/* Employee read lock already held by the caller. Locks only this loan's record. */
+static int assign_locked(int loan_id, int emp_id) {
+    int lfd = open(LOANS_FILE, O_RDWR);
+    if (lfd < 0) {
+        return (errno == ENOENT) ? LN_NOT_FOUND : LN_ERROR;
+    }
+    struct Loan l;
+    if (lock_record(lfd, loan_id, sizeof(l), F_WRLCK) < 0) {
+        close(lfd);
+        return LN_ERROR;
+    }
+    int rc;
+    int s = rec_read(lfd, loan_id, &l, sizeof(l));
+    if (s == REC_ERROR) {
+        rc = LN_ERROR;
+    } else if (s == REC_NOT_FOUND || l.loanID != loan_id) {
+        rc = LN_NOT_FOUND;
+    } else if (strcmp(l.status, LOAN_PENDING) != 0) {
+        rc = LN_BAD_STATE;               /* already assigned / decided */
+    } else {
+        set_str(l.status, LOAN_ASSIGNED, STATUS_LEN);
+        l.assignedEmpID = emp_id;
+        rc = (rec_write(lfd, loan_id, &l, sizeof(l)) == REC_OK) ? LN_OK : LN_ERROR;
+    }
+    unlock_record(lfd, loan_id, sizeof(l));
+    close(lfd);
+    return rc;
+}
+
+/* Lock order: employee (READ) -> loan record (WRITE).
+   The employee read lock pairs with promote/delete employee, which hold the
+   employee WRITE lock while they check "no assigned loans" and retire him. */
+int loan_assign(int loan_id, int emp_id) {
+    if (loan_id <= 0) {
+        return LN_NOT_FOUND;
+    }
+    if (emp_id <= 0) {
+        return LN_EMP_NOT_FOUND;
+    }
+    int efd = rec_open(EMPLOYEES_FILE);
+    if (efd < 0) {
+        return LN_ERROR;
+    }
+    struct Employee e;
+    if (lock_record(efd, emp_id, sizeof(e), F_RDLCK) < 0) {
+        close(efd);
+        return LN_ERROR;
+    }
+    int rc;
+    int s = rec_read(efd, emp_id, &e, sizeof(e));
+    if (s == REC_ERROR) {
+        rc = LN_ERROR;
+    } else if (s == REC_NOT_FOUND || e.employeeID != emp_id || strcmp(e.status, ST_DELETED) == 0) {
+        rc = LN_EMP_NOT_FOUND;
+    } else if (strcmp(e.status, ST_ACTIVE) != 0) {
+        rc = LN_EMP_INACTIVE;            /* e.g. promoted to manager */
+    } else {
+        rc = assign_locked(loan_id, emp_id);
+    }
+    unlock_record(efd, emp_id, sizeof(e));
+    close(efd);
+    return rc;
 }

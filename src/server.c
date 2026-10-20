@@ -16,6 +16,7 @@
 #include "employee_handler.h"
 #include "admin_handler.h"
 #include "staff_handler.h"
+#include "manager_handler.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -71,6 +72,10 @@ static void* client_thread(void* arg) {
         }
         /* admin commands */
         if (logged_in && cur_role == ROLE_ADMIN && handle_admin(fd, cur_id, line)) {
+            continue;
+        }
+        /* manager commands */
+        if (logged_in && cur_role == ROLE_MANAGER && handle_manager(fd, cur_id, line)) {
             continue;
         }
         /* PASSWD for admin, manager, employee (customers have their own) */

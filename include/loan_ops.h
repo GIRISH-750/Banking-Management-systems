@@ -12,6 +12,7 @@
 #define LN_BAD_STATE     5   /* loan not in the right status for this action */
 #define LN_NOT_YOURS     6   /* loan not assigned to this employee */
 #define LN_EMP_INACTIVE  7   /* employee not ACTIVE (e.g. just promoted) */
+#define LN_EMP_NOT_FOUND 8   /* employee does not exist / deleted */
 #define LN_ERROR        -1
 
 /* Customer: new PENDING loan. One open loan per customer. */

@@ -539,20 +539,49 @@ static int admin_menu(int fd, int id) {
     }
 }
 
-/* Manager features come on Day 5; for now only password + logout. */
+/* Asks loan ID + employee ID, sends ASSIGN. -1 if the connection broke. */
+static int assign_request(int fd) {
+    char req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    int loan_id, emp_id, r;
+    if ((r = ask_id("Loan ID: ", &loan_id)) <= 0) return r;
+    if ((r = ask_id("Employee ID: ", &emp_id)) <= 0) return r;
+    snprintf(req, sizeof(req), "ASSIGN %d %d\n", loan_id, emp_id);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
+/* Manager menu. Options 3-6 are wired to server commands added in Steps 4-5. */
 static int manager_menu(int fd, int id) {
     char choice[16];
     while (1) {
         printf("\n--- Manager %d ---\n", id);
-        printf("1. Change password\n0. Logout\n");
+        printf("1. View pending loans\n2. Assign loan to employee\n"
+               "3. Activate customer\n4. Deactivate customer\n"
+               "5. View feedback\n6. Mark feedback reviewed\n"
+               "7. Change password\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) return -1;
+        int r = 0;
         if (strcmp(choice, "1") == 0) {
-            if (password_request(fd) < 0) return -1;
+            r = list_request(fd, "PENDING_LOANS", "Pending loans", "No pending loans.");
+        } else if (strcmp(choice, "2") == 0) {
+            r = assign_request(fd);
+        } else if (strcmp(choice, "3") == 0) {
+            r = id_command(fd, "ACTIVATE", "Customer ID: ", NULL);
+        } else if (strcmp(choice, "4") == 0) {
+            r = id_command(fd, "DEACTIVATE", "Customer ID: ", NULL);
+        } else if (strcmp(choice, "5") == 0) {
+            r = list_request(fd, "FEEDBACK_LIST", "Feedback", "No feedback.");
+        } else if (strcmp(choice, "6") == 0) {
+            r = id_command(fd, "FEEDBACK_REVIEW", "Feedback ID: ", NULL);
+        } else if (strcmp(choice, "7") == 0) {
+            r = password_request(fd);
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {
             printf("Invalid choice.\n");
         }
+        if (r < 0) return -1;
     }
 }
 
