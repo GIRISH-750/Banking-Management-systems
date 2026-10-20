@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <poll.h>
 #include "config.h"
 #include "net_util.h"
 
@@ -663,6 +664,14 @@ int main(int argc, char* argv[]) {
     }
 
     char line[MAX_LINE_LEN], choice[16];
+
+    /* No welcome within 2 s = server busy (all slots or workers in use).
+       The client tells the user itself; the server sends nothing extra. */
+    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    if (poll(&pfd, 1, 2000) == 0) {
+        printf("Server busy, please wait...\n");
+        fflush(stdout);
+    }
     if (read_line(fd, line, sizeof(line)) <= 0) {   /* the server's welcome line */
         fprintf(stderr, "Server closed the connection.\n");
         close(fd);

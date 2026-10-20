@@ -18,6 +18,7 @@
 #include "staff_handler.h"
 #include "manager_handler.h"
 #include "journal.h"
+#include "thread_pool.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -31,10 +32,8 @@ static const char* auth_message(int rc) {
     }
 }
 
-/* One thread runs this per connected client. */
-static void* client_thread(void* arg) {
-    int fd = *(int*)arg;
-    free(arg);
+/* A pool worker runs this for one client session, then goes back to the queue. */
+static void serve_client(int fd) {
 
     char line[MAX_LINE_LEN];
     int logged_in = 0;
@@ -118,7 +117,21 @@ static void* client_thread(void* arg) {
     }
     close(fd);
     sem_post(&conn_sem);   /* free the slot for the next client */
-    return NULL;
+}
+
+/* Pool size: BANK_POOL env (1..MAX_CLIENTS) for demos, else POOL_SIZE. */
+static int pool_size_from_env(void) {
+    const char* s = getenv("BANK_POOL");
+    if (s == NULL || *s == '\0') {
+        return POOL_SIZE;
+    }
+    char* end;
+    long n = strtol(s, &end, 10);
+    if (*end != '\0' || n < 1 || n > MAX_CLIENTS) {
+        fprintf(stderr, "BANK_POOL must be 1-%d, using %d\n", MAX_CLIENTS, POOL_SIZE);
+        return POOL_SIZE;
+    }
+    return (int)n;
 }
 
 int main(void) {
@@ -158,7 +171,15 @@ int main(void) {
         return 1;
     }
 
-    printf("Server listening on port %d (max %d clients)\n", SERVER_PORT, MAX_CLIENTS);
+    int nworkers = pool_init(pool_size_from_env(), serve_client);
+    if (nworkers < 0) {
+        fprintf(stderr, "Thread pool start failed\n");
+        return 1;
+    }
+
+    printf("Server listening on port %d (max %d clients, pool of %d workers)\n",
+           SERVER_PORT, MAX_CLIENTS, nworkers);
+    fflush(stdout);
 
     while (1) {
         if (sem_wait(&conn_sem) < 0) {   /* blocks when all slots are used */
@@ -178,23 +199,11 @@ int main(void) {
             continue;
         }
 
-        int* arg = malloc(sizeof(int));
-        if (arg == NULL) {
-            close(client_fd);
-            sem_post(&conn_sem);
-            continue;
+        /* Hand the client to the pool: an idle worker takes it,
+           or it waits in the queue until one is free. */
+        if (pool_submit(client_fd) == POOL_QUEUED) {
+            fprintf(stderr, "All workers busy: client queued (waiting: %d)\n", pool_waiting());
         }
-        *arg = client_fd;
-
-        pthread_t tid;
-        if (pthread_create(&tid, NULL, client_thread, arg) != 0) {
-            perror("pthread_create");
-            free(arg);
-            close(client_fd);
-            sem_post(&conn_sem);
-            continue;
-        }
-        pthread_detach(tid);   /* thread cleans up itself, no join needed */
     }
 
     close(server_fd);
