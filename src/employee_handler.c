@@ -4,6 +4,7 @@
 #include "employee_ops.h"
 #include "net_util.h"
 #include "config.h"
+#include "loan_ops.h"
 
 #define PASSBOOK_MAX 50
 
@@ -13,7 +14,54 @@ static void reply_error(int fd, int rc) {
     send_line(fd, msg);
 }
 
+#define ASSIGNED_SHOW_MAX 50
+
+/* Employee loan commands. id = logged-in employee (from the session).
+   Returns 1 if the line was a loan command. */
+static int handle_emp_loan(int fd, int id, const char* line) {
+    char msg[MAX_LINE_LEN];
+    if (strcmp(line, "MY_ASSIGNED") == 0) {
+        struct Loan l[ASSIGNED_SHOW_MAX];
+        int n = loan_list_assigned(id, l, ASSIGNED_SHOW_MAX);
+        if (n < 0) {
+            send_line(fd, "ERR Internal error\n");
+            return 1;
+        }
+        snprintf(msg, sizeof(msg), "OK %d\n", n);
+        send_line(fd, msg);
+        for (int i = 0; i < n; i++) {
+            snprintf(msg, sizeof(msg), "Loan %-4d  customer %-4d  %10.2f\n",
+                     l[i].loanID, l[i].userID, l[i].amount);
+            send_line(fd, msg);
+        }
+        return 1;
+    }
+    int approve = (strncmp(line, "APPROVE", 7) == 0);
+    if (approve || strncmp(line, "REJECT", 6) == 0) {
+        int loan_id;
+        char extra;
+        const char* fmt = approve ? "APPROVE %d %c" : "REJECT %d %c";
+        if (sscanf(line, fmt, &loan_id, &extra) != 1) {
+            send_line(fd, approve ? "ERR Usage: APPROVE <loan_id>\n" : "ERR Usage: REJECT <loan_id>\n");
+            return 1;
+        }
+        int rc = loan_decide(loan_id, id, approve);
+        if (rc == LN_OK) {
+            snprintf(msg, sizeof(msg), approve ? "OK Loan %d approved, amount credited\n"
+                                               : "OK Loan %d rejected\n", loan_id);
+        } else {
+            snprintf(msg, sizeof(msg), "%s\n", loan_message(rc));
+        }
+        send_line(fd, msg);
+        return 1;
+    }
+    return 0;
+}
+
 int handle_employee(int fd, int id, const char* line) {
+    if (handle_emp_loan(fd, id, line)) {
+        return 1;
+    }
     (void)id;   /* used on Day 5 for loans */
     char first[64], last[64], pw[64], extra;
     char msg[MAX_LINE_LEN];

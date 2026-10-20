@@ -403,11 +403,22 @@ static int passbook_request(int fd) {
 }
 
 /* Returns 0 = logged out (back to main menu), -1 = stop. */
+/* Asks a loan ID, sends "<cmd> <id>" (APPROVE / REJECT). -1 if connection broke. */
+static int decide_request(int fd, const char* cmd) {
+    char req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    int loan_id, r;
+    if ((r = ask_id("Loan ID: ", &loan_id)) <= 0) return r;
+    snprintf(req, sizeof(req), "%s %d\n", cmd, loan_id);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
 static int employee_menu(int fd, int id) {
     char choice[16];
     while (1) {
         printf("\n--- Employee %d ---\n", id);
-        printf("1. Add customer\n2. Modify customer\n3. View customer passbook\n4. Change password\n0. Logout\n");
+        printf("1. Add customer\n2. Modify customer\n3. View customer passbook\n4. Change password\n5. View assigned loans\n6. Approve loan\n7. Reject loan\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) return -1;
         int r;
         if (strcmp(choice, "1") == 0) {
@@ -418,6 +429,12 @@ static int employee_menu(int fd, int id) {
             r = passbook_request(fd);
         } else if (strcmp(choice, "4") == 0) {
             r = password_request(fd);
+        } else if (strcmp(choice, "5") == 0) {
+            r = list_request(fd, "MY_ASSIGNED", "Loans assigned to you", "No loans assigned to you.");
+        } else if (strcmp(choice, "6") == 0) {
+            r = decide_request(fd, "APPROVE");
+        } else if (strcmp(choice, "7") == 0) {
+            r = decide_request(fd, "REJECT");
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {

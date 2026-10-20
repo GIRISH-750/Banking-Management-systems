@@ -9,6 +9,7 @@
 #include "rec_store.h"
 #include "counter.h"
 #include "lock.h"
+#include "txn_store.h"
 
 /* LOCK ORDER (whole project): employees -> loans -> customers.
    counter.bin is a leaf lock: taken last, released at once. */
@@ -226,4 +227,87 @@ int loan_assign(int loan_id, int emp_id) {
 /* Manager: every loan, any status (supervisor view). Read-only. */
 int loan_list_all(struct Loan* out, int max) {
     return list_loans(SCAN_ALL, 0, out, max);
+}
+
+/* Both locks held (loan + customer). Loan first, then money; undo on failure. */
+static int credit_customer(int lfd, int cfd, struct Loan* l, struct Customer* c) {
+    set_str(l->status, LOAN_APPROVED, STATUS_LEN);
+    if (rec_write(lfd, l->loanID, l, sizeof(*l)) != REC_OK) {
+        return LN_ERROR;                          /* nothing changed */
+    }
+    c->balance += l->amount;
+    c->loan += l->amount;
+    if (customer_write(cfd, l->userID, c) != STORE_OK) {
+        set_str(l->status, LOAN_ASSIGNED, STATUS_LEN);   /* undo step 1 */
+        rec_write(lfd, l->loanID, l, sizeof(*l));
+        return LN_ERROR;
+    }
+    txn_log(l->userID, TXN_LOAN_CREDIT, l->amount);  /* while still locked */
+    return LN_OK;
+}
+
+/* Loan write lock already held. Locks the customer, credits the money.
+   Write order: loan APPROVED first, then the money. A crash in between
+   leaves "approved but not paid" (no money created), never "paid but
+   still ASSIGNED" (could be approved twice). Day 6 journal closes the gap. */
+static int approve_locked(int lfd, struct Loan* l) {
+    int cfd = customer_open();
+    if (cfd < 0) {
+        return LN_ERROR;
+    }
+    struct Customer c;
+    if (lock_record(cfd, l->userID, sizeof(c), F_WRLCK) < 0) {
+        close(cfd);
+        return LN_ERROR;
+    }
+    int rc;
+    int s = customer_read(cfd, l->userID, &c);
+    if (s == STORE_ERROR) {
+        rc = LN_ERROR;
+    } else if (s == STORE_NOT_FOUND || c.userID != l->userID || strcmp(c.status, ST_DELETED) == 0) {
+        rc = LN_NOT_FOUND;
+    } else if (strcmp(c.status, ST_ACTIVE) != 0) {
+        rc = LN_INACTIVE;                         /* loan stays ASSIGNED */
+    } else {
+        rc = credit_customer(lfd, cfd, l, &c);
+    }
+    unlock_record(cfd, l->userID, sizeof(c));
+    close(cfd);
+    return rc;
+}
+
+/* Employee: ASSIGNED -> APPROVED / REJECTED. Lock order: loan -> customer.
+   No employee lock needed: promote/delete refuse while he has assigned loans. */
+int loan_decide(int loan_id, int emp_id, int approve) {
+    if (loan_id <= 0) {
+        return LN_NOT_FOUND;
+    }
+    int lfd = open(LOANS_FILE, O_RDWR);
+    if (lfd < 0) {
+        return (errno == ENOENT) ? LN_NOT_FOUND : LN_ERROR;
+    }
+    struct Loan l;
+    if (lock_record(lfd, loan_id, sizeof(l), F_WRLCK) < 0) {
+        close(lfd);
+        return LN_ERROR;
+    }
+    int rc;
+    int s = rec_read(lfd, loan_id, &l, sizeof(l));
+    if (s == REC_ERROR) {
+        rc = LN_ERROR;
+    } else if (s == REC_NOT_FOUND || l.loanID != loan_id) {
+        rc = LN_NOT_FOUND;
+    } else if (strcmp(l.status, LOAN_ASSIGNED) != 0) {
+        rc = LN_BAD_STATE;                        /* blocks double approval */
+    } else if (l.assignedEmpID != emp_id) {
+        rc = LN_NOT_YOURS;
+    } else if (!approve) {
+        set_str(l.status, LOAN_REJECTED, STATUS_LEN);
+        rc = (rec_write(lfd, loan_id, &l, sizeof(l)) == REC_OK) ? LN_OK : LN_ERROR;
+    } else {
+        rc = approve_locked(lfd, &l);
+    }
+    unlock_record(lfd, loan_id, sizeof(l));
+    close(lfd);
+    return rc;
 }
