@@ -17,7 +17,7 @@ int counter_next(size_t field) {
         int* slot = (int*)((char*)&c + field);    /* the field we were asked for */
         id = *slot;
         (*slot)++;
-        if (pwrite(fd, &c, sizeof(c), 0) != (ssize_t)sizeof(c)) {
+        if (pwrite(fd, &c, sizeof(c), 0) != (ssize_t)sizeof(c) || fsync(fd) != 0) {
             id = -1;
         }
     }

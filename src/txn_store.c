@@ -33,6 +33,9 @@ int txn_log(int customer_id, const char* type, float amount) {
        file, so two writers with different IDs never touch the same bytes. */
     lock_record(fd, id, sizeof(t), F_WRLCK);
     ssize_t n = pwrite(fd, &t, sizeof(t), (off_t)(id - 1) * (off_t)sizeof(t));
+    if (n == (ssize_t)sizeof(t) && fsync(fd) != 0) {
+        n = -1;
+    }
     unlock_record(fd, id, sizeof(t));
     close(fd);
     return (n == (ssize_t)sizeof(t)) ? 0 : -1;

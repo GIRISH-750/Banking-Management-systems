@@ -17,6 +17,7 @@
 #include "admin_handler.h"
 #include "staff_handler.h"
 #include "manager_handler.h"
+#include "journal.h"
 
 static sem_t conn_sem;   /* counts free connection slots */
 
@@ -121,6 +122,14 @@ static void* client_thread(void* arg) {
 }
 
 int main(void) {
+    /* Crash recovery: undo operations that were cut off by a crash.
+       Runs before bind/listen, so no client can see half-done data. */
+    int fixed = jr_recover();
+    if (fixed < 0) {
+        fprintf(stderr, "Journal recovery failed\n");
+        return 1;
+    }
+    fprintf(stderr, "Recovery: rolled back %d unfinished operation(s)\n", fixed);
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         perror("socket");

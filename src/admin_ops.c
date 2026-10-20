@@ -7,6 +7,7 @@
 #include "customer_store.h"
 #include "loan_store.h"
 #include "lock.h"
+#include "journal.h"
 #include "counter.h"
 #include "hash.h"
 
@@ -214,41 +215,51 @@ int adm_promote(int emp_id, int* new_mgr_id) {
         emp_release(efd, emp_id);
         return (n < 0) ? ADM_ERROR : ADM_HAS_LOANS;
     }
-
-    /* Step 1: create the manager record (same name + password hash) */
     int mid = counter_next(offsetof(struct Counter, next_manager_id));
     int mfd = (mid > 0) ? rec_open(MANAGERS_FILE) : -1;
-    if (mfd < 0) {
+    struct Manager m;
+    if (mfd < 0 || lock_record(mfd, mid, sizeof(m), F_WRLCK) < 0) {
+        if (mfd >= 0) {
+            close(mfd);
+        }
         emp_release(efd, emp_id);
         return ADM_ERROR;
     }
-    struct Manager m;
+    /* Atomicity: new manager slot + employee record go to the journal first. */
+    struct jr_target t[2] = {{JF_MANAGERS, mid}, {JF_EMPLOYEES, emp_id}};
+    int slot = jr_begin(t, 2);
+    if (slot < 0) {
+        close(mfd);
+        emp_release(efd, emp_id);
+        return ADM_ERROR;
+    }
+    /* Step 1: create the manager record (same name + password hash) */
     memset(&m, 0, sizeof(m));
     m.managerID = mid;
     set_str(m.first_name, e.first_name, NAME_LEN);
     set_str(m.last_name, e.last_name, NAME_LEN);
     memcpy(m.password, e.password, PASS_LEN);
     set_str(m.status, ST_ACTIVE, STATUS_LEN);
-    if (lock_record(mfd, mid, sizeof(m), F_WRLCK) < 0 ||
-        rec_write(mfd, mid, &m, sizeof(m)) != REC_OK) {
-        close(mfd);                      /* closing the fd also drops its OFD lock */
-        emp_release(efd, emp_id);
-        return ADM_ERROR;
+    rc = ADM_OK;
+    if (rec_write(mfd, mid, &m, sizeof(m)) != REC_OK) {
+        rc = ADM_ERROR;
+    } else {
+        crash_point("promote");                      /* test: die between the 2 writes */
+        /* Step 2: retire the employee record */
+        set_str(e.status, ST_INACTIVE, STATUS_LEN);
+        if (rec_write(efd, emp_id, &e, sizeof(e)) != REC_OK) {
+            set_str(m.status, ST_DELETED, STATUS_LEN);    /* rollback step 1 */
+            rec_write(mfd, mid, &m, sizeof(m));
+            rc = ADM_ERROR;
+        }
     }
-
-    /* Step 2: retire the employee record */
-    set_str(e.status, ST_INACTIVE, STATUS_LEN);
-    if (rec_write(efd, emp_id, &e, sizeof(e)) != REC_OK) {
-        set_str(m.status, ST_DELETED, STATUS_LEN);    /* rollback step 1 */
-        rec_write(mfd, mid, &m, sizeof(m));
-        close(mfd);
-        emp_release(efd, emp_id);
-        return ADM_ERROR;
-    }
-    close(mfd);
+    jr_end(slot);                                    /* commit point */
+    close(mfd);                                      /* closing also drops its OFD lock */
     emp_release(efd, emp_id);
-    *new_mgr_id = mid;
-    return ADM_OK;
+    if (rc == ADM_OK) {
+        *new_mgr_id = mid;
+    }
+    return rc;
 }
 
 /* Demote: same 2 steps the other way round. Whole-file lock on managers.bin,
@@ -292,18 +303,11 @@ int adm_demote(int mgr_id, int* new_emp_id) {
         return rc;
     }
 
-    /* Step 1: create the employee record */
+    /* Step 1: create the employee record (journaled together with step 2) */
     int eid = counter_next(offsetof(struct Counter, next_employee_id));
     int efd = (eid > 0) ? rec_open(EMPLOYEES_FILE) : -1;
     struct Employee e;
-    memset(&e, 0, sizeof(e));
-    e.employeeID = eid;
-    set_str(e.first_name, m.first_name, NAME_LEN);
-    set_str(e.last_name, m.last_name, NAME_LEN);
-    memcpy(e.password, m.password, PASS_LEN);
-    set_str(e.status, ST_ACTIVE, STATUS_LEN);
-    if (efd < 0 || lock_record(efd, eid, sizeof(e), F_WRLCK) < 0 ||
-        rec_write(efd, eid, &e, sizeof(e)) != REC_OK) {
+    if (efd < 0 || lock_record(efd, eid, sizeof(e), F_WRLCK) < 0) {
         if (efd >= 0) {
             close(efd);
         }
@@ -311,22 +315,40 @@ int adm_demote(int mgr_id, int* new_emp_id) {
         close(mfd);
         return ADM_ERROR;
     }
-
-    /* Step 2: retire the manager record */
-    set_str(m.status, ST_INACTIVE, STATUS_LEN);
-    if (rec_write(mfd, mgr_id, &m, sizeof(m)) != REC_OK) {
-        set_str(e.status, ST_DELETED, STATUS_LEN);    /* rollback step 1 */
-        rec_write(efd, eid, &e, sizeof(e));
+    struct jr_target jt[2] = {{JF_EMPLOYEES, eid}, {JF_MANAGERS, mgr_id}};
+    int slot = jr_begin(jt, 2);
+    if (slot < 0) {
         close(efd);
         unlock_file(mfd);
         close(mfd);
         return ADM_ERROR;
     }
+    memset(&e, 0, sizeof(e));
+    e.employeeID = eid;
+    set_str(e.first_name, m.first_name, NAME_LEN);
+    set_str(e.last_name, m.last_name, NAME_LEN);
+    memcpy(e.password, m.password, PASS_LEN);
+    set_str(e.status, ST_ACTIVE, STATUS_LEN);
+    if (rec_write(efd, eid, &e, sizeof(e)) != REC_OK) {
+        rc = ADM_ERROR;
+    } else {
+        crash_point("demote");                       /* test: die between the 2 writes */
+        /* Step 2: retire the manager record */
+        set_str(m.status, ST_INACTIVE, STATUS_LEN);
+        if (rec_write(mfd, mgr_id, &m, sizeof(m)) != REC_OK) {
+            set_str(e.status, ST_DELETED, STATUS_LEN);    /* rollback step 1 */
+            rec_write(efd, eid, &e, sizeof(e));
+            rc = ADM_ERROR;
+        }
+    }
+    jr_end(slot);                                    /* commit point */
     close(efd);
     unlock_file(mfd);
     close(mfd);
-    *new_emp_id = eid;
-    return ADM_OK;
+    if (rc == ADM_OK) {
+        *new_emp_id = eid;
+    }
+    return rc;
 }
 
 const char* adm_message(int rc) {

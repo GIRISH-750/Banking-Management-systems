@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "customer_ops.h"
+#include "journal.h"
 #include "customer_store.h"
 #include "lock.h"
 #include "txn_store.h"
@@ -47,7 +48,10 @@ static int change_balance(int id, float amount, int sign, float* balance) {
         return OP_ERROR;
     }
 
-    lock_record(fd, id, sizeof(c), F_WRLCK);        /* exclusive: whole read-change-write */
+    if (lock_record(fd, id, sizeof(c), F_WRLCK) < 0) {   /* exclusive: whole read-change-write */
+        close(fd);
+        return OP_ERROR;
+    }
     int result;
     int rc = customer_read(fd, id, &c);
 
@@ -92,25 +96,26 @@ int op_transfer(int from, int to, float amount, float* balance) {
     if (!(amount > 0.0f) || amount > MAX_AMOUNT) {
         return OP_BAD_AMOUNT;
     }
-
     struct Customer src, dst;
     int fd = customer_open();
     if (fd < 0) {
         return OP_ERROR;
     }
-
-    /* Lock ordering: always lock the LOWER id first. If A->B and B->A run
-       together, both try the same record first, so one simply waits:
-       no circular wait, no deadlock. */
+    /* Lock ordering: always lock the LOWER id first (no circular wait). */
     int first  = (from < to) ? from : to;
     int second = (from < to) ? to : from;
-    lock_record(fd, first, sizeof(src), F_WRLCK);
-    lock_record(fd, second, sizeof(src), F_WRLCK);
-
+    if (lock_record(fd, first, sizeof(src), F_WRLCK) < 0) {
+        close(fd);
+        return OP_ERROR;
+    }
+    if (lock_record(fd, second, sizeof(src), F_WRLCK) < 0) {
+        unlock_record(fd, first, sizeof(src));
+        close(fd);
+        return OP_ERROR;
+    }
     int result;
     int rs = customer_read(fd, from, &src);
     int rd = customer_read(fd, to, &dst);
-
     if (rs == STORE_ERROR || rd == STORE_ERROR) {
         result = OP_ERROR;
     } else if (rs == STORE_NOT_FOUND || rd == STORE_NOT_FOUND) {
@@ -120,25 +125,35 @@ int op_transfer(int from, int to, float amount, float* balance) {
     } else if (src.balance < amount) {
         result = OP_NO_FUNDS;
     } else {
-        /* All checks passed BEFORE any write, so a rule failure never
-           leaves a half-done transfer. */
-        float old_src = src.balance;
-        src.balance -= amount;
-        dst.balance += amount;
-        if (customer_write(fd, from, &src) != STORE_OK) {
-            result = OP_ERROR;                        /* nothing changed yet */
-        } else if (customer_write(fd, to, &dst) != STORE_OK) {
-            src.balance = old_src;                    /* undo the debit */
-            customer_write(fd, from, &src);
+        /* Atomicity: old values of both records go to the journal first. */
+        struct jr_target t[2] = {{JF_CUSTOMERS, from}, {JF_CUSTOMERS, to}};
+        int slot = jr_begin(t, 2);
+        if (slot < 0) {
             result = OP_ERROR;
         } else {
-            txn_log(from, TXN_TRANSFER_OUT, amount);
-            txn_log(to, TXN_TRANSFER_IN, amount);
-            *balance = src.balance;
-            result = OP_OK;
+            float old_src = src.balance;
+            src.balance -= amount;
+            dst.balance += amount;
+            if (customer_write(fd, from, &src) != STORE_OK) {
+                result = OP_ERROR;
+            } else {
+                crash_point("transfer");             /* test: die between the 2 writes */
+                if (customer_write(fd, to, &dst) != STORE_OK) {
+                    src.balance = old_src;           /* undo the debit */
+                    customer_write(fd, from, &src);
+                    result = OP_ERROR;
+                } else {
+                    result = OP_OK;
+                }
+            }
+            jr_end(slot);                            /* commit point */
+            if (result == OP_OK) {
+                txn_log(from, TXN_TRANSFER_OUT, amount);
+                txn_log(to, TXN_TRANSFER_IN, amount);
+                *balance = src.balance;
+            }
         }
     }
-
     unlock_record(fd, second, sizeof(src));          /* unlock in reverse order */
     unlock_record(fd, first, sizeof(src));
     close(fd);

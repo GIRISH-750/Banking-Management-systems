@@ -9,6 +9,7 @@
 #include "rec_store.h"
 #include "counter.h"
 #include "lock.h"
+#include "journal.h"
 #include "txn_store.h"
 
 /* LOCK ORDER (whole project): employees -> loans -> customers.
@@ -229,21 +230,32 @@ int loan_list_all(struct Loan* out, int max) {
     return list_loans(SCAN_ALL, 0, out, max);
 }
 
-/* Both locks held (loan + customer). Loan first, then money; undo on failure. */
+/* Both locks held (loan + customer). Journal first, then loan, then money. */
 static int credit_customer(int lfd, int cfd, struct Loan* l, struct Customer* c) {
-    set_str(l->status, LOAN_APPROVED, STATUS_LEN);
-    if (rec_write(lfd, l->loanID, l, sizeof(*l)) != REC_OK) {
-        return LN_ERROR;                          /* nothing changed */
-    }
-    c->balance += l->amount;
-    c->loan += l->amount;
-    if (customer_write(cfd, l->userID, c) != STORE_OK) {
-        set_str(l->status, LOAN_ASSIGNED, STATUS_LEN);   /* undo step 1 */
-        rec_write(lfd, l->loanID, l, sizeof(*l));
+    struct jr_target t[2] = {{JF_LOANS, l->loanID}, {JF_CUSTOMERS, l->userID}};
+    int slot = jr_begin(t, 2);
+    if (slot < 0) {
         return LN_ERROR;
     }
-    txn_log(l->userID, TXN_LOAN_CREDIT, l->amount);  /* while still locked */
-    return LN_OK;
+    int rc = LN_OK;
+    set_str(l->status, LOAN_APPROVED, STATUS_LEN);
+    if (rec_write(lfd, l->loanID, l, sizeof(*l)) != REC_OK) {
+        rc = LN_ERROR;
+    } else {
+        crash_point("approve");                      /* test: die between the 2 writes */
+        c->balance += l->amount;
+        c->loan += l->amount;
+        if (customer_write(cfd, l->userID, c) != STORE_OK) {
+            set_str(l->status, LOAN_ASSIGNED, STATUS_LEN);   /* undo step 1 */
+            rec_write(lfd, l->loanID, l, sizeof(*l));
+            rc = LN_ERROR;
+        }
+    }
+    jr_end(slot);                                    /* commit point */
+    if (rc == LN_OK) {
+        txn_log(l->userID, TXN_LOAN_CREDIT, l->amount);
+    }
+    return rc;
 }
 
 /* Loan write lock already held. Locks the customer, credits the money.

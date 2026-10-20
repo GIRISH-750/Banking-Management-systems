@@ -29,5 +29,5 @@ int customer_write(int fd, int id, const struct Customer* c) {
     if (n != (ssize_t)sizeof(*c)) {
         return STORE_ERROR;
     }
-    return STORE_OK;
+    return (fsync(fd) == 0) ? STORE_OK : STORE_ERROR;   /* durable before OK */
 }
