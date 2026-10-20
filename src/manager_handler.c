@@ -2,6 +2,7 @@
 #include <string.h>
 #include "manager_handler.h"
 #include "loan_ops.h"
+#include "manager_ops.h"
 #include "net_util.h"
 #include "config.h"
 
@@ -40,6 +41,55 @@ int handle_manager(int fd, int id, const char* line) {
                      l[i].loanID, l[i].userID, l[i].amount, l[i].status, l[i].assignedEmpID);
             send_line(fd, msg);
         }
+        return 1;
+    }
+    int act = (strncmp(line, "ACTIVATE", 8) == 0);
+    if (act || strncmp(line, "DEACTIVATE", 10) == 0) {
+        int cid;
+        char extra;
+        if (sscanf(line + (act ? 8 : 10), "%d %c", &cid, &extra) != 1) {
+            send_line(fd, "ERR Usage: ACTIVATE|DEACTIVATE <customer_id>\n");
+            return 1;
+        }
+        int rc = mgr_set_customer_status(cid, act);
+        if (rc == MG_OK) {
+            snprintf(msg, sizeof(msg), "OK Customer %d is now %s\n", cid, act ? "ACTIVE" : "INACTIVE");
+        } else {
+            snprintf(msg, sizeof(msg), "%s\n", mgr_message(rc));
+        }
+        send_line(fd, msg);
+        return 1;
+    }
+    if (strcmp(line, "FEEDBACK_LIST") == 0) {
+        struct Feedback f[PENDING_SHOW_MAX];
+        int n = fb_list(f, PENDING_SHOW_MAX);
+        if (n < 0) {
+            send_line(fd, "ERR Internal error\n");
+            return 1;
+        }
+        snprintf(msg, sizeof(msg), "OK %d\n", n);
+        send_line(fd, msg);
+        for (int i = 0; i < n; i++) {
+            snprintf(msg, sizeof(msg), "#%-3d customer %-4d %-8s %s\n",
+                     f[i].feedbackID, f[i].customerID, f[i].status, f[i].message);
+            send_line(fd, msg);
+        }
+        return 1;
+    }
+    if (strncmp(line, "FEEDBACK_REVIEW", 15) == 0) {
+        int fid;
+        char extra;
+        if (sscanf(line, "FEEDBACK_REVIEW %d %c", &fid, &extra) != 1) {
+            send_line(fd, "ERR Usage: FEEDBACK_REVIEW <feedback_id>\n");
+            return 1;
+        }
+        int rc = fb_review(fid);
+        if (rc == MG_OK) {
+            snprintf(msg, sizeof(msg), "OK Feedback %d marked REVIEWED\n", fid);
+        } else {
+            snprintf(msg, sizeof(msg), "%s\n", mgr_message(rc));
+        }
+        send_line(fd, msg);
         return 1;
     }
     if (strncmp(line, "ASSIGN", 6) == 0) {

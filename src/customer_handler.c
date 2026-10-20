@@ -6,6 +6,7 @@
 #include "net_util.h"
 #include "config.h"
 #include "loan_ops.h"
+#include "manager_ops.h"
 #include "loan_store.h"
 
 #define HISTORY_MAX 10   /* show the last 10 transactions */
@@ -59,6 +60,17 @@ static int handle_loan_cmd(int fd, int id, const char* line) {
         } else {
             send_line(fd, "OK You can apply\n");
         }
+        return 1;
+    }
+    if (strncmp(line, "FEEDBACK ", 9) == 0) {
+        int fb_id = 0;
+        int rc = fb_submit(id, line + 9, &fb_id);    /* id from the session */
+        if (rc == MG_OK) {
+            snprintf(msg, sizeof(msg), "OK Feedback %d submitted, thank you\n", fb_id);
+        } else {
+            snprintf(msg, sizeof(msg), "%s\n", mgr_message(rc));
+        }
+        send_line(fd, msg);
         return 1;
     }
     if (strcmp(line, "MY_LOANS") == 0) {

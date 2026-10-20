@@ -277,11 +277,25 @@ static int loan_apply_request(int fd) {
 }
 
 /* Customer menu. Returns 0 = logged out (back to main menu), -1 = stop. */
+/* Asks a feedback message and sends "FEEDBACK <message>". */
+static int feedback_request(int fd) {
+    char text[256], req[MAX_LINE_LEN], reply[MAX_LINE_LEN];
+    if (ask("Your feedback (max 199 chars): ", text, sizeof(text)) < 0) return -1;
+    if (text[0] == '\0' || strlen(text) > 199) {
+        printf("Feedback must be 1-199 characters.\n");
+        return 0;
+    }
+    snprintf(req, sizeof(req), "FEEDBACK %s\n", text);
+    if (request(fd, req, reply, sizeof(reply)) < 0) return -1;
+    printf("Server: %s\n", reply);
+    return 0;
+}
+
 static int customer_menu(int fd, int id) {
     char choice[16], reply[MAX_LINE_LEN];
     while (1) {
         printf("\n--- Customer %d ---\n", id);
-        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n6. Change password\n7. Apply for loan\n8. My loans\n0. Logout\n");
+        printf("1. View balance\n2. Deposit\n3. Withdraw\n4. Transfer\n5. Transaction history\n6. Change password\n7. Apply for loan\n8. My loans\n9. Give feedback\n0. Logout\n");
         if (ask("Choice: ", choice, sizeof(choice)) < 0) {
             return -1;
         }
@@ -305,6 +319,8 @@ static int customer_menu(int fd, int id) {
             r = loan_apply_request(fd);
         } else if (strcmp(choice, "8") == 0) {
             r = list_request(fd, "MY_LOANS", "Your loans", "No loans yet.");
+        } else if (strcmp(choice, "9") == 0) {
+            r = feedback_request(fd);
         } else if (strcmp(choice, "0") == 0) {
             return do_logout(fd);
         } else {
