@@ -1,0 +1,36 @@
+// Architecture diagram - Banking Management System (CS-513)
+// Paste into https://dreampuf.github.io/GraphvizOnline to view or edit
+digraph Architecture {
+  graph [rankdir=TB, fontname="Arial", fontsize=16, nodesep=0.4, ranksep=0.55, pad=0.4,
+         label="Architecture of the Banking Management System\n ", labelloc=t];
+  node  [shape=box, style="rounded,filled", fontname="Arial", fontsize=12,
+         fillcolor="#eef3fb", color="#3b5b92", margin="0.25,0.12"];
+  edge  [fontname="Arial", fontsize=10, color="#555555"];
+
+  subgraph cluster_clients {
+    label="CLIENTS"; style="rounded,dashed"; color="#888888"; fontsize=13;
+    c1 [label="Customer"]; c2 [label="Employee"]; c3 [label="Manager"]; c4 [label="Admin"];
+  }
+
+  subgraph cluster_server {
+    label="SERVER"; style="rounded"; color="#1f6f5c"; fontcolor="#1f6f5c"; fontsize=13;
+    gate    [label="Connection limit\n(max 100 clients)", fillcolor="#fff6d6", color="#c9a200"];
+    pool    [label="Thread pool\n(100 ready worker threads)", fillcolor="#eaf7f2", color="#1f6f5c"];
+    login   [label="Login + one session per user"];
+    handler [label="Request handlers\nCustomer | Employee | Manager | Admin"];
+    logic   [label="Business rules\n(balance, loans, status checks)"];
+    lock    [label="Record locks\n(no two users change\nthe same record together)", fillcolor="#fff6d6", color="#c9a200"];
+    jr      [label="Journal\n(undo if the server crashes)", fillcolor="#fdeaea", color="#bb3333"];
+  }
+
+  files [shape=cylinder, label="Data files (.bin)\ncustomers, employees, managers,\nloans, transactions, feedback",
+         fillcolor="#f2f2f2", color="#666666"];
+
+  c1 -> gate; c2 -> gate; c3 -> gate; c4 -> gate [label="  socket"];
+  gate -> pool -> login -> handler -> logic;
+  logic -> lock;
+  logic -> jr;
+  lock -> files;
+  jr -> files;
+  logic -> files [label="  read / write"];
+}

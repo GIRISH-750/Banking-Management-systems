@@ -1,0 +1,179 @@
+@startuml BankingClassDiagram
+' Our own class diagram - Banking Management System (CS-513)
+' Paste into https://www.planttext.com and click Refresh
+skinparam monochrome true
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 70
+title Class Diagram for Banking Management System
+
+class Client {
+  -server_ip: string
+  -socket_fd: int
+  +connect_to_server()
+  +show_menu(int role)
+  +send_request(string command)
+}
+
+class Bank {
+  -port: int = 5000
+  -max_clients: int = 100
+  +handle_client_connection(int client_socket_fd)
+  +validate_login(int role, int id, string password)
+  +handle_admin_requests(int client_socket_fd, int admin_id)
+  +handle_manager_requests(int client_socket_fd, int manager_id)
+  +handle_employee_requests(int client_socket_fd, int employee_id)
+  +handle_customer_requests(int client_socket_fd, int customer_id)
+  -log_transaction(int customer_id, string type, float amount)
+  -get_next_id(string field)
+}
+
+class ThreadPool {
+  -worker_count: int = 100
+  -job_queue: int[100]
+  +submit(int client_socket_fd)
+  -worker_loop()
+}
+
+class SessionManager {
+  -active_users: list
+  +start_session(int role, int id)
+  +end_session(int role, int id)
+}
+
+class LockManager {
+  +lock_record(int fd, int id, string mode)
+  +unlock_record(int fd, int id)
+}
+
+class Journal {
+  +begin(record_list)
+  +end(int slot)
+  +recover()
+}
+
+class Admin {
+  -adminID: int
+  -first_name: string
+  -last_name: string
+  -password: string
+  +add_employee(string first, string last, string password)
+  +modify_employee(int employee_id, string first, string last)
+  +delete_employee(int employee_id)
+  +promote_to_manager(int employee_id)
+  +demote_to_employee(int manager_id)
+  +view_customer(int customer_id)
+  +modify_customer(int customer_id, string first, string last)
+  +delete_customer(int customer_id)
+  +list_staff()
+  +change_password(string old_pw, string new_pw)
+}
+
+class Manager {
+  -managerID: int
+  -first_name: string
+  -last_name: string
+  -password: string
+  -status: string
+  +view_pending_loans()
+  +assign_loan(int loan_id, int employee_id)
+  +view_all_loans()
+  +activate_customer(int customer_id)
+  +deactivate_customer(int customer_id)
+  +view_feedback()
+  +review_feedback(int feedback_id)
+  +change_password(string old_pw, string new_pw)
+}
+
+class Employee {
+  -employeeID: int
+  -first_name: string
+  -last_name: string
+  -password: string
+  -status: string
+  +add_customer(string first, string last, string password)
+  +modify_customer(int customer_id, string first, string last)
+  +view_passbook(int customer_id)
+  +view_assigned_loans()
+  +approve_loan(int loan_id)
+  +reject_loan(int loan_id)
+  +change_password(string old_pw, string new_pw)
+}
+
+class Customer {
+  -userID: int
+  -firstName: string
+  -lastName: string
+  -password: string
+  -balance: float
+  -loan: float
+  -status: string
+  +get_balance()
+  +deposit(float amount)
+  +withdraw(float amount)
+  +transfer(int to_customer_id, float amount)
+  +view_transaction_history()
+  +change_password(string old_pw, string new_pw)
+  +apply_for_loan(float amount)
+  +view_my_loans()
+  +add_feedback(string message)
+}
+
+class Loan {
+  -loanID: int
+  -userID: int
+  -amount: float
+  -status: string
+  -assignedEmpID: int
+}
+
+class Feedback {
+  -feedbackID: int
+  -customerID: int
+  -message: string
+  -status: string
+}
+
+class Transaction {
+  -transactionID: int
+  -customerID: int
+  -type: string
+  -amount: float
+  -timestamp: string
+}
+
+' ----- client -----
+Client "0..100" --> "1" Bank : TCP socket (port 5000)
+
+' ----- server side -----
+Bank *-- ThreadPool
+Bank --> SessionManager
+Bank ..> LockManager
+Bank ..> Journal
+
+' ----- who handles whom -----
+Bank "1" ..> "1" Admin : handles
+Bank "1" ..> "*" Manager : handles
+Bank "1" ..> "*" Employee : handles
+Bank "1" ..> "*" Customer : handles
+
+' ----- roles -----
+Admin "1" --> "*" Employee : manages
+Admin "1" --> "*" Manager : manages
+Admin "1" --> "*" Customer : manages
+Manager "*" --> "*" Customer : activates / deactivates
+Manager "*" ..> "*" Loan : assigns
+Manager "*" ..> "*" Feedback : reviews
+Employee "*" --> "*" Customer : adds / modifies
+Employee "0..1" -- "0..*" Loan : processes
+Employee "*" ..> "*" Transaction : views
+Employee .. Manager : promote / demote
+
+' ----- customer owns -----
+Customer "1" *-- "0..*" Transaction : has
+Customer "1" o-- "0..*" Loan : applies for (max 1 open)
+Customer "1" o-- "0..*" Feedback : submits
+
+@enduml
