@@ -162,35 +162,10 @@ docs/
 
 ## Known limitations
 
-**Security**
-- Passwords are hashed with SHA-256 but **not salted**; a production system would use bcrypt or argon2.
-- Client-server traffic is **plain text** (no TLS).
-- No limit on wrong login attempts.
-- The password is visible while typing in the client.
-- There is a single admin account, created by `./seed`. Admins cannot be added from the app, and a forgotten admin password can only be reset by re-seeding.
-
-**Data and storage**
-- Money is stored as `float`, so very large amounts can have small rounding errors (a real bank uses integer paise).
-- Records are fixed-size: names longer than 49 characters are cut.
-- `.bin` files depend on the compiler's struct layout, so they are not portable between machines.
-- Lists (pending loans, a customer's loans, history) scan the whole file; fine for this size, slow for millions of records.
-- Deleted records are kept (soft delete) and IDs are never reused.
-
-**Concurrency and scale**
-- One worker thread serves one client for the whole session, so at most 100 users can be connected at once.
-- An idle logged-in client keeps its slot until it quits (no idle timeout).
-- A client that disconnects while the server is writing a reply can stop the server (planned fix: ignore `SIGPIPE`).
-- File locks only work on one machine, so the server cannot be run on several machines sharing the same files.
-
-**Reliability**
-- Multi-record operations (transfer, loan approval, promote, demote) are crash-safe through the undo journal.
-  Single-account deposit/withdraw are not journaled: after a crash at the exact wrong moment, a history line can be missing, but the balance is always correct.
-- `fsync` after every write makes operations slower (the full test suite takes about 4 minutes on WSL).
-- No request IDs: if a client retried a transfer after a timeout, it could run twice.
-
-**Features not included**
-- No loan repayment, interest or EMI.
-- No joint accounts, no statements by date range.
+- Passwords are hashed with SHA-256 but not salted, and there is no limit on wrong login attempts.
+- Money is stored as `float` (a real bank would use integer paise).
+- At most 100 users can be connected at once, and an idle client keeps its slot until it quits.
+- Data is stored in local binary files, so the server runs on one machine only.
 
 ---
 
