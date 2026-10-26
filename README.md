@@ -7,6 +7,21 @@ even under concurrent use and even if the server crashes.
 
 ---
 
+## Quick start
+
+Needs Linux (on Windows: WSL / Ubuntu) and git.
+
+```bash
+git clone https://github.com/GIRISH-750/Banking-Management-systems.git
+cd Banking-Management-systems
+make deps     # once: installs compiler + OpenSSL
+make run      # builds, creates demo data, starts the server and opens a client
+```
+More users at the same time: open a new terminal and run `make run-client`.
+Login example: role `4` (Customer), ID `1`, password `alice123`. All commands: `make help`.
+
+---
+
 ## Features
 
 **4 roles, each with its own menu:**

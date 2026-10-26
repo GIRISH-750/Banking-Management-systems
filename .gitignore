@@ -1,8 +1,16 @@
-# compiled programs (top folder only, so tests/*.c are still tracked)
+# compiled programs
+/seed
 /server
 /client
-/seed
 /test_*
-/demo_*
-# data is recreated by ./seed
-data/*.bin
+*.o
+server.log
+
+# data created by ./seed (keep the empty folder)
+data/*
+!data/.gitkeep
+
+# python / editor junk
+__pycache__/
+*.swp
+.vscode/
