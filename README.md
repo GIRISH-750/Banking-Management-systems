@@ -162,8 +162,8 @@ docs/
 
 ## Known limitations
 
-- Passwords are hashed with SHA-256 but not salted, and there is no limit on wrong login attempts.
-- Money is stored as `float` (a real bank would use integer paise).
+- Records are fixed-size for fast direct access, so names are limited to 49 characters.
+- Lists such as pending loans and transaction history scan the whole file; fast at this size, but large data would need an index.
 - At most 100 users can be connected at once, and an idle client keeps its slot until it quits.
 - Data is stored in local binary files, so the server runs on one machine only.
 
